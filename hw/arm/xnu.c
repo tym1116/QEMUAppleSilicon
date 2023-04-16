@@ -2,6 +2,7 @@
  *
  * Copyright (c) 2019 Jonathan Afek <jonyafek@me.com>
  * Copyright (c) 2021 Nguyen Hoang Trung (TrungNguyen1909)
+ * Copyright (c) 2023 ChefKiss Inc.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -70,6 +71,7 @@ static const char *KEEP_COMP[] = {
     "soc-tuner,t8030\0$",
     "atc-phy,t8030\0atc-phy,t8027\0$",
     "usb-drd,t8030\0usb-drd,t8027\0$",
+    "disp0,t8030\0$",
 };
 
 static const char *REM_NAMES[] = {
@@ -430,7 +432,7 @@ void macho_load_dtb(DTBNode *root, AddressSpace *as, MemoryRegion *mem,
     assert(prop);
     ((uint64_t *)prop->value)[0] = info->dtb_pa;
     ((uint64_t *)prop->value)[1] = info->dtb_size;
-    
+
     prop = find_dtb_prop(child, "RAMDisk");
     assert(prop);
     if ((info->ramdisk_pa) && (info->ramdisk_size)) {
@@ -823,7 +825,7 @@ uint32_t macho_build_version(struct mach_header_64 *mh)
     int index;
 
     if (mh->filetype == MH_FILESET) {
-        mh = macho_get_fileset_header(mh, "com.apple.kernel"); 
+        mh = macho_get_fileset_header(mh, "com.apple.kernel");
     }
     cmd = (struct load_command *)((char *)mh + sizeof(struct mach_header_64));
 
@@ -850,7 +852,7 @@ uint32_t macho_platform(struct mach_header_64 *mh)
     int index;
 
     if (mh->filetype == MH_FILESET) {
-        mh = macho_get_fileset_header(mh, "com.apple.kernel"); 
+        mh = macho_get_fileset_header(mh, "com.apple.kernel");
     }
     cmd = (struct load_command *)((char *)mh + sizeof(struct mach_header_64));
 

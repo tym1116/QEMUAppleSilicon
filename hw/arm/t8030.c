@@ -3,6 +3,7 @@
  *
  * Copyright (c) 2019 Johnathan Afek <jonyafek@me.com>
  * Copyright (c) 2021 Nguyen Hoang Trung (TrungNguyen1909)
+ * Copyright (c) 2023 ChefKiss Inc.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -67,7 +68,7 @@
 #include "hw/char/apple_uart.h"
 
 #include "hw/arm/xnu_pf.h"
-#include "hw/display/m1_fb.h"
+#include "hw/display/apple_h12p.h"
 
 #define T8030_DRAM_BASE         (0x800000000)
 #define T8030_DRAM_SIZE         (4 * GiB)
@@ -103,9 +104,6 @@
 #define T8030_SIO_DATA_BASE     (0x80186c000)
 #define T8030_SIO_DATA_SIZE     (0xf8000)
 #define T8030_SIO_DATA_REMAP    (0x220000)
-
-#define T8030_DISPLAY_BASE      (0x8f7fb4000)
-#define T8030_DISPLAY_SIZE      (35 * 1024 * 1024)
 
 #define T8030_PANIC_BASE        (0x8ffeb0000)
 #define T8030_PANIC_SIZE        (0x100000)
@@ -275,7 +273,7 @@ static void t8030_load_classic_kc(T8030MachineState *tms, const char *cmdline)
     g_virt_base += slide_virt - slide_phys;
 
     /* TrustCache */
-    info->trustcache_pa = vtop_static(text_range->va + slide_virt) - 
+    info->trustcache_pa = vtop_static(text_range->va + slide_virt) -
                           info->trustcache_size;
 
     macho_load_trustcache(tms->trustcache, info->trustcache_size,
@@ -587,7 +585,7 @@ static void t8030_memory_setup(MachineState *machine)
         break;
     default:
         error_setg(&error_abort, "%s: Unsupported kernelcache type: 0x%x\n",
-                   __func__, hdr->filetype);                
+                   __func__, hdr->filetype);
         break;
     }
 }
@@ -1550,37 +1548,6 @@ static void t8030_create_sio(MachineState* machine)
     sysbus_realize_and_unref(sio, &error_fatal);
 }
 
-static void t8030_create_boot_display(MachineState *machine)
-{
-    T8030MachineState *tms = T8030_MACHINE(machine);
-    SysBusDevice *fb = NULL;
-    MemoryRegion *vram = NULL;
-    tms->video.v_baseAddr = T8030_DISPLAY_BASE;
-    tms->video.v_rowBytes = 480 * 4;
-    tms->video.v_width = 480;
-    tms->video.v_height = 640;
-    tms->video.v_depth = 32 | ((2 - 1) << 16);
-    tms->video.v_display = 1;
-
-    if (xnu_contains_boot_arg(machine->kernel_cmdline, "-s", false)
-        || xnu_contains_boot_arg(machine->kernel_cmdline, "-v", false)) {
-        tms->video.v_display = 0;
-    }
-
-    fb = SYS_BUS_DEVICE(qdev_new(TYPE_M1_FB));
-    object_property_set_uint(OBJECT(fb), "width", 480, &error_fatal);
-    object_property_set_uint(OBJECT(fb), "height", 640, &error_fatal);
-
-    vram = g_new(MemoryRegion, 1);
-    memory_region_init_ram(vram, OBJECT(fb), "vram", T8030_DISPLAY_SIZE, &error_fatal);
-    memory_region_add_subregion_overlap(tms->sysmem, tms->video.v_baseAddr, vram, 1);
-
-    object_property_add_const_link(OBJECT(fb), "vram", OBJECT(vram));
-    object_property_add_child(OBJECT(machine), "fb", OBJECT(fb));
-
-    sysbus_realize_and_unref(fb, &error_fatal);
-}
-
 static void t8030_cpu_reset_work(CPUState *cpu, run_on_cpu_data data)
 {
     T8030MachineState *tms = data.host_ptr;
@@ -1815,7 +1782,7 @@ static void t8030_machine_init(MachineState *machine)
         t8030_create_spi(machine, i);
     }
 
-    t8030_create_boot_display(machine);
+    apple_h12p_create(machine);
 
     tms->init_done_notifier.notify = t8030_machine_init_done;
     qemu_add_machine_init_done_notifier(&tms->init_done_notifier);
