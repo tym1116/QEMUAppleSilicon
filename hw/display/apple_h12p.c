@@ -18,116 +18,21 @@
 #include "hw/arm/t8030.h"
 #include "hw/arm/apple_dart.h"
 
-static void iomfb_mbox_update_irq(IOMFBMboxState *mbox)
-{
-    if (((mbox->inbox_ctl | mbox->outbox_ctl) & IOMFB_MBOX_CTL_ENABLE)) {
-        qemu_irq_raise(mbox->irq);
-    } else {
-        qemu_irq_lower(mbox->irq);
-    }
-}
-
-static bool iomfb_mbox_handle_write(IOMFBMboxState *mbox, uint64_t base, uint64_t addr, uint64_t data) {
-    if (addr < base) { return false; }
-    addr -= base;
-    bool ret = false;
-    switch (addr) {
-        case IOMFB_MBOX_INT_FILTER:
-            mbox->int_filter = (uint32_t)data;
-            ret = true;
-            break;
-        // ---- INBOX ----
-        case IOMFB_MBOX_INBOX + IOMFB_MBOX_CTL:
-            mbox->inbox_ctl = (uint32_t)data;
-            ret = true;
-            break;
-        case IOMFB_MBOX_INBOX + IOMFB_MBOX_WRITE:
-            mbox->inbox_write = (uint32_t)data;
-            ret = true;
-            break;
-        case IOMFB_MBOX_INBOX + IOMFB_MBOX_READ:
-            mbox->inbox_read = (uint32_t)data;
-            ret = true;
-            break;
-        // ---- OUTBOX ----
-        case IOMFB_MBOX_OUTBOX + IOMFB_MBOX_CTL:
-            mbox->outbox_ctl = (uint32_t)data;
-            ret = true;
-            break;
-        case IOMFB_MBOX_OUTBOX + IOMFB_MBOX_WRITE:
-            mbox->outbox_write = (uint32_t)data;
-            ret = true;
-            break;
-        case IOMFB_MBOX_OUTBOX + IOMFB_MBOX_READ:
-            mbox->outbox_read = (uint32_t)data;
-            ret = true;
-            break;
-    }
-    if (ret) {
-        iomfb_mbox_update_irq(mbox);
-        info_report("iomfb_mbox_handle_write returned true");
-    }
-    return ret;
-}
-
-static bool iomfb_mbox_handle_read(IOMFBMboxState *mbox, uint64_t base, uint64_t addr, uint64_t *data) {
-    if (addr < base) { return false; }
-    addr -= base;
-    bool ret = false;
-    switch (addr) {
-        case IOMFB_MBOX_INT_FILTER:
-            *data = mbox->int_filter;
-            ret = true;
-            break;
-        // ---- INBOX ----
-        case IOMFB_MBOX_INBOX + IOMFB_MBOX_CTL:
-            *data = mbox->inbox_ctl;
-            ret = true;
-            break;
-        case IOMFB_MBOX_INBOX + IOMFB_MBOX_WRITE:
-            *data = mbox->inbox_write;
-            ret = true;
-            break;
-        case IOMFB_MBOX_INBOX + IOMFB_MBOX_READ:
-            *data = mbox->inbox_read;
-            ret = true;
-            break;
-        // ---- OUTBOX ----
-        case IOMFB_MBOX_OUTBOX + IOMFB_MBOX_CTL:
-            *data = mbox->outbox_ctl;
-            ret = true;
-            break;
-        case IOMFB_MBOX_OUTBOX + IOMFB_MBOX_WRITE:
-            *data = mbox->outbox_write;
-            ret = true;
-            break;
-        case IOMFB_MBOX_OUTBOX + IOMFB_MBOX_READ:
-            *data = mbox->outbox_read;
-            ret = true;
-            break;
-    }
-    if (ret) { info_report("iomfb_mbox_handle_read returned true"); }
-    return ret;
-}
-
-static void iomfb_mbox_init(IOMFBMboxState *mbox, qemu_irq irq) {
-    mbox->int_filter = 0xFFFFFFFF;
-    mbox->inbox_ctl = 0xFFFFFFFF;
-    mbox->inbox_write = 0x0;
-    mbox->inbox_read = 0x0;
-    mbox->outbox_ctl = 0xFFFFFFFF;
-    mbox->outbox_write = 0x0;
-    mbox->outbox_read = 0x0;
-    mbox->irq = irq;
-}
-
 static void h12p_up_write(void *opaque, hwaddr addr, uint64_t data, unsigned size)
 {
     AppleH12PState *s = APPLE_H12P(opaque);
-    if (!iomfb_mbox_handle_write(&s->apt_mbox, IOMFB_MBOX_REG_BASE_APT, addr, data)) {
-        iomfb_mbox_handle_write(&s->pcc_mbox, IOMFB_MBOX_REG_BASE_PCC, addr, data);
+    switch (addr) {
+        case REG_GENPIPE0_PLANE_START:
+            s->genpipe0_plane_start = (uint32_t)data;
+            break;
+        case REG_GENPIPE0_PLANE_END:
+            s->genpipe0_plane_end = (uint32_t)data;
+            qemu_irq_lower(s->irqs[0]);
+            break;
+        default:
+            break;
     }
-    // info_report("h12p_up_write: 0x" TARGET_FMT_plx " <- 0x" TARGET_FMT_plx, addr, data);
+            info_report("h12p_up_write: 0x" TARGET_FMT_plx " <- 0x" TARGET_FMT_plx, addr, data);
 }
 
 static uint64_t h12p_up_read(void *opaque, hwaddr addr, unsigned size)
@@ -138,23 +43,32 @@ static uint64_t h12p_up_read(void *opaque, hwaddr addr, unsigned size)
         case REG_UPPIPE_VER:
             ret = 0x70045;
             break;
-        case REG_GENPIPE0_IDK:
+        case REG_GENPIPE0_BLACK_FRAME:
+        case REG_GENPIPE1_BLACK_FRAME:
             ret = -1;
             break;
         case REG_UPPIPE_FRAME_SIZE:
             ret = (s->width << 16) | s->height;
             break;
+        case REG_GENPIPE0_PIXEL_FORMAT:
+        case REG_GENPIPE1_PIXEL_FORMAT:
+            ret = GENPIPE_DFB_PIXEL_FORMAT_BGRA;
+            break;
+        case REG_GENPIPE0_PLANE_START:
+            ret = s->genpipe0_plane_start;
+            break;
+        case REG_GENPIPE0_PLANE_END:
+            ret = s->genpipe0_plane_end;
+            break;
         case REG_GENPIPE0_FRAME_SIZE:
+        case REG_GENPIPE1_FRAME_SIZE:
         case REG_UP_CONFIG_FRAME_SIZE:
             ret = ((s->width * 4) << 16) | s->height;
             break;
         default:
-            if (!iomfb_mbox_handle_read(&s->apt_mbox, IOMFB_MBOX_REG_BASE_APT, addr, &ret)) {
-                iomfb_mbox_handle_read(&s->pcc_mbox, IOMFB_MBOX_REG_BASE_PCC, addr, &ret);
-            }
             break;
     }
-    // info_report("h12p_up_read: 0x" TARGET_FMT_plx " -> 0x" TARGET_FMT_plx, addr, ret);
+    info_report("h12p_up_read: 0x" TARGET_FMT_plx " -> 0x" TARGET_FMT_plx, addr, ret);
     return ret;
 }
 
@@ -168,6 +82,22 @@ static const MemoryRegionOps h12p_up_ops = {
     .valid.max_access_size = 4,
     .valid.unaligned = false,
 };
+
+static void apple_h12p_timer_int(void *opaque)
+{
+    AppleH12PState *s = APPLE_H12P(opaque);
+    qemu_irq_raise(s->irqs[0]);
+    // qemu_irq_raise(s->irqs[2]);
+    // qemu_irq_raise(s->irqs[3]);
+    // qemu_irq_raise(s->irqs[4]);
+    // qemu_irq_raise(s->irqs[6]);
+    timer_mod(s->timer, qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL) + 0x33C);
+    qemu_irq_lower(s->irqs[0]);
+    // qemu_irq_lower(s->irqs[2]);
+    // qemu_irq_lower(s->irqs[3]);
+    // qemu_irq_lower(s->irqs[4]);
+    // qemu_irq_lower(s->irqs[6]);
+}
 
 void apple_h12p_create(MachineState *machine)
 {
@@ -204,11 +134,7 @@ void apple_h12p_create(MachineState *machine)
         sysbus_connect_irq(sbd, i, qdev_get_gpio_in(DEVICE(tms->aic), ints[i]));
     }
 
-    qdev_init_gpio_out_named(DEVICE(dev), &s->apt_mbox.irq, "disp0.apt_irq", IOMFB_MBOX_IRQ_APT);
-    qdev_init_gpio_out_named(DEVICE(dev), &s->pcc_mbox.irq, "disp0.pcc_irq", IOMFB_MBOX_IRQ_PCC);
-
-    iomfb_mbox_init(&s->apt_mbox, s->irqs[IOMFB_MBOX_IRQ_APT]);
-    iomfb_mbox_init(&s->pcc_mbox, s->irqs[IOMFB_MBOX_IRQ_PCC]);
+    s->timer = timer_new_ns(QEMU_CLOCK_VIRTUAL, apple_h12p_timer_int, s);
 
     AppleDARTState *dart = APPLE_DART(object_property_get_link(OBJECT(machine), "dart-disp0", &error_fatal));
     assert(dart);
@@ -228,28 +154,55 @@ void apple_h12p_create(MachineState *machine)
     sysbus_realize_and_unref(sbd, &error_fatal);
 }
 
-static void fb_gfx_update(void *opaque)
+static void fb_draw_row(void *opaque, uint8_t *dest, const uint8_t *src, int width, int dest_pitch)
 {
-    // TODO: implement this properly
-    AppleH12PState *s = APPLE_H12P(opaque);
+    while (width--) {
+        /* Load using endian-safe loads */
+        uint32_t color = ldl_le_p(src);
+        /* Increment source pointer */
+        src += dest_pitch;
+
+        /* Blit it to the display output now that it's converted */
+        /* FIXME this might not be endian-safe but the rest should be */
+        memcpy(dest, &color, sizeof(color));
+        dest += dest_pitch;
+    }
 }
 
-static void fb_invalidate(void *opaque)
+static void fb_gfx_update(void *opaque)
 {
-    // TODO: implement this properly
-    printf("FB invalidate called\n");
+    AppleH12PState *s = APPLE_H12P(opaque);
+    DisplaySurface *surface = qemu_console_surface(s->console);
+
+    if (!s->genpipe0_plane_start || !s->genpipe0_plane_end) {
+        return;
+    }
+
+    size_t size = s->genpipe0_plane_end - s->genpipe0_plane_start;
+    uint8_t *buf = g_malloc(size);
+    if (dma_memory_read(&s->dma_as, s->genpipe0_plane_start, buf, size, MEMTXATTRS_UNSPECIFIED) != MEMTX_OK) {
+        g_free(buf);
+        return;
+    }
+
+    uint8_t *dest = surface_data(surface);
+    for (size_t i = 0; i < s->height; i++) {
+        fb_draw_row(s, dest, buf + i * s->width * 4, s->width, 4);
+        dest += s->width;
+    }
+    g_free(buf);
+
+    dpy_gfx_update_full(s->console);
 }
 
 static const GraphicHwOps apple_h12p_ops = {
-    .invalidate = fb_invalidate,
     .gfx_update = fb_gfx_update,
 };
 
 static void apple_h12p_realize(DeviceState *dev, Error **errp)
 {
     AppleH12PState *s = APPLE_H12P(dev);
-    iomfb_mbox_update_irq(&s->apt_mbox);
-    iomfb_mbox_update_irq(&s->pcc_mbox);
+    timer_mod(s->timer, qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL) + 0x33C);
 
     s->console = graphic_console_init(dev, 0, &apple_h12p_ops, s);
     qemu_console_resize(s->console, s->width, s->height);
