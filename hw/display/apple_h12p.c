@@ -106,7 +106,7 @@ static bool iomfb_mbox_handle_read(IOMFBMboxState *mbox, uint64_t base, uint64_t
             ret = true;
             break;
     }
-    if (ret) { info_report("iomfb_mbox_handle_write returned true"); }
+    if (ret) { info_report("iomfb_mbox_handle_read returned true"); }
     return ret;
 }
 
