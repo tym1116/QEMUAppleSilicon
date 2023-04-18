@@ -18,18 +18,143 @@
 #include "hw/arm/t8030.h"
 #include "hw/arm/apple_dart.h"
 
+static void iomfb_mbox_update_irq(IOMFBMboxState *mbox)
+{
+    if (((mbox->inbox_ctl | mbox->outbox_ctl) & IOMFB_MBOX_CTL_ENABLE)) {
+        qemu_irq_raise(mbox->irq);
+    } else {
+        qemu_irq_lower(mbox->irq);
+    }
+}
+
+static bool iomfb_mbox_handle_write(IOMFBMboxState *mbox, uint64_t base, uint64_t addr, uint64_t data) {
+    if (addr < base) { return false; }
+    addr -= base;
+    bool ret = false;
+    switch (addr) {
+        case IOMFB_MBOX_INT_FILTER:
+            mbox->int_filter = (uint32_t)data;
+            ret = true;
+            break;
+        // ---- INBOX ----
+        case IOMFB_MBOX_INBOX + IOMFB_MBOX_CTL:
+            mbox->inbox_ctl = (uint32_t)data;
+            ret = true;
+            break;
+        case IOMFB_MBOX_INBOX + IOMFB_MBOX_WRITE:
+            mbox->inbox_write = (uint32_t)data;
+            ret = true;
+            break;
+        case IOMFB_MBOX_INBOX + IOMFB_MBOX_READ:
+            mbox->inbox_read = (uint32_t)data;
+            ret = true;
+            break;
+        // ---- OUTBOX ----
+        case IOMFB_MBOX_OUTBOX + IOMFB_MBOX_CTL:
+            mbox->outbox_ctl = (uint32_t)data;
+            ret = true;
+            break;
+        case IOMFB_MBOX_OUTBOX + IOMFB_MBOX_WRITE:
+            mbox->outbox_write = (uint32_t)data;
+            ret = true;
+            break;
+        case IOMFB_MBOX_OUTBOX + IOMFB_MBOX_READ:
+            mbox->outbox_read = (uint32_t)data;
+            ret = true;
+            break;
+    }
+    if (ret) {
+        iomfb_mbox_update_irq(mbox);
+        info_report("iomfb_mbox_handle_write returned true");
+    }
+    return ret;
+}
+
+static bool iomfb_mbox_handle_read(IOMFBMboxState *mbox, uint64_t base, uint64_t addr, uint64_t *data) {
+    if (addr < base) { return false; }
+    addr -= base;
+    bool ret = false;
+    switch (addr) {
+        case IOMFB_MBOX_INT_FILTER:
+            *data = mbox->int_filter;
+            ret = true;
+            break;
+        // ---- INBOX ----
+        case IOMFB_MBOX_INBOX + IOMFB_MBOX_CTL:
+            *data = mbox->inbox_ctl;
+            ret = true;
+            break;
+        case IOMFB_MBOX_INBOX + IOMFB_MBOX_WRITE:
+            *data = mbox->inbox_write;
+            ret = true;
+            break;
+        case IOMFB_MBOX_INBOX + IOMFB_MBOX_READ:
+            *data = mbox->inbox_read;
+            ret = true;
+            break;
+        // ---- OUTBOX ----
+        case IOMFB_MBOX_OUTBOX + IOMFB_MBOX_CTL:
+            *data = mbox->outbox_ctl;
+            ret = true;
+            break;
+        case IOMFB_MBOX_OUTBOX + IOMFB_MBOX_WRITE:
+            *data = mbox->outbox_write;
+            ret = true;
+            break;
+        case IOMFB_MBOX_OUTBOX + IOMFB_MBOX_READ:
+            *data = mbox->outbox_read;
+            ret = true;
+            break;
+    }
+    if (ret) { info_report("iomfb_mbox_handle_write returned true"); }
+    return ret;
+}
+
+static void iomfb_mbox_init(IOMFBMboxState *mbox, qemu_irq irq) {
+    mbox->int_filter = 0xFFFFFFFF;
+    mbox->inbox_ctl = 0xFFFFFFFF;
+    mbox->inbox_write = 0x0;
+    mbox->inbox_read = 0x0;
+    mbox->outbox_ctl = 0xFFFFFFFF;
+    mbox->outbox_write = 0x0;
+    mbox->outbox_read = 0x0;
+    mbox->irq = irq;
+}
+
 static void h12p_up_write(void *opaque, hwaddr addr, uint64_t data, unsigned size)
 {
-    AppleH12PState *fb = APPLE_H12P(opaque);
-    info_report("H12P/UnifiedPipeline: 0x" TARGET_FMT_plx " <- 0x" TARGET_FMT_plx, addr, data);
-    *(uint32_t *)&fb->regs[addr] = (uint32_t)(data);
+    AppleH12PState *s = APPLE_H12P(opaque);
+    if (!iomfb_mbox_handle_write(&s->apt_mbox, IOMFB_MBOX_REG_BASE_APT, addr, data)) {
+        iomfb_mbox_handle_write(&s->pcc_mbox, IOMFB_MBOX_REG_BASE_PCC, addr, data);
+    }
+    // info_report("h12p_up_write: 0x" TARGET_FMT_plx " <- 0x" TARGET_FMT_plx, addr, data);
 }
 
 static uint64_t h12p_up_read(void *opaque, hwaddr addr, unsigned size)
 {
-    AppleH12PState *fb = APPLE_H12P(opaque);
-    uint64_t ret = *(uint32_t *)&fb->regs[addr];
-    info_report("H12P/UnifiedPipeline: 0x" TARGET_FMT_plx " -> 0x" TARGET_FMT_plx, addr, ret);
+    AppleH12PState *s = APPLE_H12P(opaque);
+    uint64_t ret = 0;
+    switch (addr) {
+        case REG_UPPIPE_VER:
+            ret = 0x70045;
+            break;
+        case REG_GENPIPE0_IDK:
+            ret = -1;
+            break;
+        case REG_UPPIPE_FRAME_SIZE:
+            ret = (s->width << 16) | s->height;
+            break;
+        case REG_GENPIPE0_FRAME_SIZE:
+        case REG_UP_CONFIG_FRAME_SIZE:
+            ret = ((s->width * 4) << 16) | s->height;
+            break;
+        default:
+            if (!iomfb_mbox_handle_read(&s->apt_mbox, IOMFB_MBOX_REG_BASE_APT, addr, &ret)) {
+                iomfb_mbox_handle_read(&s->pcc_mbox, IOMFB_MBOX_REG_BASE_PCC, addr, &ret);
+            }
+            break;
+    }
+    // info_report("h12p_up_read: 0x" TARGET_FMT_plx " -> 0x" TARGET_FMT_plx, addr, ret);
     return ret;
 }
 
@@ -47,174 +172,108 @@ static const MemoryRegionOps h12p_up_ops = {
 void apple_h12p_create(MachineState *machine)
 {
     T8030MachineState *tms = T8030_MACHINE(machine);
-    // tms->video.v_baseAddr = T8030_DISPLAY_BASE;
-    tms->video.v_rowBytes = 512 * 4;
-    tms->video.v_width = 512;
-    tms->video.v_height = 512;
-    tms->video.v_depth = 32 | ((2 - 1) << 16);
-    // tms->video.v_display = 1;
+    DeviceState *dev = qdev_new(TYPE_APPLE_H12P);
+    SysBusDevice *sbd = SYS_BUS_DEVICE(dev);
+    AppleH12PState *s = APPLE_H12P(sbd);
 
-    if (xnu_contains_boot_arg(machine->kernel_cmdline, "-s", false)
-        || xnu_contains_boot_arg(machine->kernel_cmdline, "-v", false)) {
-        tms->video.v_display = 0;
-    }
-
-    SysBusDevice *sbd = SYS_BUS_DEVICE(qdev_new(TYPE_APPLE_H12P));
-    object_property_set_uint(OBJECT(sbd), "width", 512, &error_fatal);
-    object_property_set_uint(OBJECT(sbd), "height", 512, &error_fatal);
-
-    AppleH12PState *h12p = APPLE_H12P(sbd);
-    h12p->cnt = 0x1E;
-    *(uint32_t *)&h12p->regs[REG_UPPIPE_VER] = 0x70045; // No A0 SoC
-    *(uint32_t *)&h12p->regs[REG_GENPIPE0_IDK] = -1;
-    *(uint32_t *)&h12p->regs[REG_GENPIPE0_FRAME_SIZE] = (512 << 0x10) | 512;
     DTBNode *armio = find_dtb_node(tms->device_tree, "arm-io");
     assert(armio);
     DTBNode *child = find_dtb_node(armio, "disp0");
     assert(child);
     assert(set_dtb_prop(child, "display-target", 15, "DisplayTarget5"));
-    uint8_t dispTimingInfo[] = {0x3C, 0x03, 0x00, 0x00, 0x90, 0x00, 0x00, 0x00, 0x01, 0x00,
-                                0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x07, 0x00, 0x00,
-                                0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00,
-                                0x00, 0x00};
-    assert(set_dtb_prop(child, "display-timing-info", 32, &dispTimingInfo));
+    uint32_t dispTimingInfo[] = {0x33C, 0x90, 0x1, 0x1, 0x700, 0x1, 0x1, 0x1};
+    assert(set_dtb_prop(child, "display-timing-info", 8 * sizeof(uint32_t), &dispTimingInfo));
+    uint32_t data = 0xD;
+    assert(set_dtb_prop(child, "bics-param-set", 4, &data));
+
     DTBProp *prop = find_dtb_prop(child, "reg");
     assert(prop);
     MemoryRegion *h12p_mem = g_new(MemoryRegion, 1);
-    uint64_t *reg = (uint64_t*)prop->value;
+    uint64_t *reg = (uint64_t *)prop->value;
     memory_region_init_io(h12p_mem, OBJECT(sbd), &h12p_up_ops, sbd, "up.regs", reg[1]);
     sysbus_init_mmio(sbd, h12p_mem);
     sysbus_mmio_map(sbd, 0, tms->soc_base_pa + reg[0]);
     object_property_add_const_link(OBJECT(sbd), "up.regs", OBJECT(h12p_mem));
-    AppleDARTState *dart = APPLE_DART(object_property_get_link(OBJECT(machine),
-                      "dart-disp0", &error_fatal));
-    assert(dart);
 
+    prop = find_dtb_prop(child, "interrupts");
+    assert(prop);
+    uint32_t *ints = (uint32_t *)prop->value;
+
+    for (size_t i = 0; i < prop->length / sizeof(uint32_t); i++) {
+        sysbus_init_irq(sbd, &s->irqs[0]);
+        sysbus_connect_irq(sbd, i, qdev_get_gpio_in(DEVICE(tms->aic), ints[i]));
+    }
+
+    qdev_init_gpio_out_named(DEVICE(dev), &s->apt_mbox.irq, "disp0.apt_irq", IOMFB_MBOX_IRQ_APT);
+    qdev_init_gpio_out_named(DEVICE(dev), &s->pcc_mbox.irq, "disp0.pcc_irq", IOMFB_MBOX_IRQ_PCC);
+
+    iomfb_mbox_init(&s->apt_mbox, s->irqs[IOMFB_MBOX_IRQ_APT]);
+    iomfb_mbox_init(&s->pcc_mbox, s->irqs[IOMFB_MBOX_IRQ_PCC]);
+
+    AppleDARTState *dart = APPLE_DART(object_property_get_link(OBJECT(machine), "dart-disp0", &error_fatal));
+    assert(dart);
     child = find_dtb_node(armio, "dart-disp0");
     assert(child);
     child = find_dtb_node(child, "mapper-disp0");
     assert(child);
     prop = find_dtb_prop(child, "reg");
     assert(prop);
-    h12p->dma_mr = MEMORY_REGION(apple_dart_iommu_mr(dart, *(uint32_t *)prop->value));
-    assert(h12p->dma_mr);
-    assert(object_property_add_const_link(OBJECT(sbd), "dma_mr", OBJECT(h12p->dma_mr)));
-    address_space_init(&h12p->dma_as, h12p->dma_mr, "disp0");
+    s->dma_mr = MEMORY_REGION(apple_dart_iommu_mr(dart, *(uint32_t *)prop->value));
+    assert(s->dma_mr);
+    assert(object_property_add_const_link(OBJECT(sbd), "dma_mr", OBJECT(s->dma_mr)));
+    address_space_init(&s->dma_as, s->dma_mr, "disp0");
 
-    child = find_dtb_node(tms->device_tree, "product");
-    uint64_t data64 = 0x100000027;
-    assert(set_dtb_prop(child, "display-corner-radius", 8, &data64));
-    uint32_t data = 0x1;
-    assert(set_dtb_prop(child, "oled-display", 4, &data));
-    assert(set_dtb_prop(child, "graphics-featureset-class", 7, "MTL1,2"));
-    assert(set_dtb_prop(child, "graphics-featureset-fallbacks", 15, "MTL1,2:GLES2,0"));
-    assert(set_dtb_prop(tms->device_tree, "target-type", 4, "sim")); // TODO: implement PMP
-
-    // MemoryRegion *vram = g_new(MemoryRegion, 1);
-    // memory_region_init_ram(vram, OBJECT(fb), "vram", T8030_DISPLAY_SIZE, &error_fatal);
-    // memory_region_add_subregion_overlap(tms->sysmem, tms->video.v_baseAddr, vram, 1);
-    // object_property_add_const_link(OBJECT(sbd), "vram", OBJECT(vram));
-    object_property_add_child(OBJECT(machine), "sbd", OBJECT(sbd));
+    object_property_add_child(OBJECT(machine), "h12p", OBJECT(sbd));
 
     sysbus_realize_and_unref(sbd, &error_fatal);
 }
 
-static void fb_draw_row(void *opaque, uint8_t *dest, const uint8_t *src,
-                        int width, int dest_pitch)
-{
-    while (width--) {
-        /* Load using endian-safe loads */
-        uint32_t color = ldl_le_p(src);
-        /* Increment source pointer */
-        src += dest_pitch;
-
-        /* Blit it to the display output now that it's converted */
-        /* FIXME this might not be endian-safe but the rest should be */
-        memcpy(dest, &color, sizeof(color));
-        /*
-         * NOTE: We always assume that pixels are packed end to end so we
-         * ignore dest_pitch
-         */
-        dest += dest_pitch;
-    }
-}
-
 static void fb_gfx_update(void *opaque)
 {
+    // TODO: implement this properly
     AppleH12PState *s = APPLE_H12P(opaque);
-    DisplaySurface *surface = qemu_console_surface(s->console);
-
-    /* Used as both input to start converting fb memory and output of dirty */
-    int first_row = 0;
-    /* Output of last row of fb that was updated during conversion */
-    int last_row;
-
-    int width = s->width;
-    int height = s->height;
-    int stride = width * 4; /* Bytes per line is 4*pixels */
-
-    /* TODO: this is the only way to tell if it's not initialized since
-     * vram_section isn't a pointer. We should just handle invalidate properly
-     */
-    // if (s->vram_section.mr == NULL) {
-    //     framebuffer_update_memory_section(&s->vram_section, s->vram, 0,
-    //                                       height, src_stride);
-    // }
-
-    // /*
-    //  * Update the display memory that's changed using fb_draw_row to convert
-    //  * between the source and destination pixel formats
-    //  */
-    // framebuffer_update_display(surface, &s->vram_section,
-    //                            width, height,
-    //                            src_stride, dest_stride, 0, 0,
-    //                            fb_draw_row, s, &first_row, &last_row);
-
-    /* If anything changed update that region of the display */
-    if (first_row >= 0) {
-        /* # of rows that were updated, including row 1 (offset 0) */
-        int updated_rows = last_row - first_row + 1;
-        dpy_gfx_update(s->console, 0, first_row, width, updated_rows);
-    }
 }
 
 static void fb_invalidate(void *opaque)
 {
+    // TODO: implement this properly
     printf("FB invalidate called\n");
 }
 
 static const GraphicHwOps apple_h12p_ops = {
-        .invalidate = fb_invalidate,
-        .gfx_update = fb_gfx_update,
+    .invalidate = fb_invalidate,
+    .gfx_update = fb_gfx_update,
 };
 
 static void apple_h12p_realize(DeviceState *dev, Error **errp)
 {
-    printf("Qemu FB realize\n");
     AppleH12PState *s = APPLE_H12P(dev);
+    iomfb_mbox_update_irq(&s->apt_mbox);
+    iomfb_mbox_update_irq(&s->pcc_mbox);
 
     s->console = graphic_console_init(dev, 0, &apple_h12p_ops, s);
     qemu_console_resize(s->console, s->width, s->height);
 }
 
 static const VMStateDescription vmstate_apple_h12p = {
-        .name = TYPE_APPLE_H12P,
-        .version_id = 1,
-        .minimum_version_id = 1,
-        .fields = (VMStateField[]) {
-                VMSTATE_UINT32(width, AppleH12PState),
-                VMSTATE_UINT32(height, AppleH12PState),
-                VMSTATE_END_OF_LIST()
-        }
+    .name = TYPE_APPLE_H12P,
+    .version_id = 1,
+    .minimum_version_id = 1,
+    .fields = (VMStateField[]) {
+        VMSTATE_UINT32(width, AppleH12PState),
+        VMSTATE_UINT32(height, AppleH12PState),
+        VMSTATE_END_OF_LIST()
+    },
 };
 
 static Property apple_h12p_props[] = {
-        DEFINE_PROP_UINT32("width", AppleH12PState, width, 512),
-        DEFINE_PROP_UINT32("height", AppleH12PState, height, 512),
-        DEFINE_PROP_END_OF_LIST()
+    DEFINE_PROP_UINT32("width", AppleH12PState, width, 480),
+    DEFINE_PROP_UINT32("height", AppleH12PState, height, 680),
+    DEFINE_PROP_END_OF_LIST()
 };
 
-static void apple_h12p_class_init(ObjectClass *oc, void *data) {
+static void apple_h12p_class_init(ObjectClass *oc, void *data)
+{
     DeviceClass *dc = DEVICE_CLASS(oc);
 
     set_bit(DEVICE_CATEGORY_DISPLAY, dc->categories);
@@ -224,10 +283,10 @@ static void apple_h12p_class_init(ObjectClass *oc, void *data) {
 }
 
 static const TypeInfo apple_h12p_type_info = {
-        .name = TYPE_APPLE_H12P,
-        .parent = TYPE_SYS_BUS_DEVICE,
-        .instance_size = sizeof(AppleH12PState),
-        .class_init = apple_h12p_class_init,
+    .name = TYPE_APPLE_H12P,
+    .parent = TYPE_SYS_BUS_DEVICE,
+    .instance_size = sizeof(AppleH12PState),
+    .class_init = apple_h12p_class_init,
 };
 
 static void apple_h12p_register_types(void)

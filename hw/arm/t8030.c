@@ -195,7 +195,7 @@ static bool t8030_check_panic(MachineState *machine)
     return panic_info->eph_magic == EMBEDDED_PANIC_MAGIC;
 }
 
-static size_t get_kaslr_random()
+static size_t get_kaslr_random(void)
 {
     size_t value = 0;
     qemu_guest_getrandom(&value, sizeof(value), NULL);
@@ -1174,7 +1174,6 @@ static void t8030_create_usb(MachineState *machine)
     AppleDARTState *dart;
     IOMMUMemoryRegion *iommu = NULL;
     uint32_t *ints;
-    uint32_t value;
 
     set_dtb_prop(drd, "device-mac-address", 6, "\xbc\xde\x48\x33\x44\x55");
     set_dtb_prop(drd, "host-mac-address", 6, "\xbc\xde\x48\x00\x11\x22");
@@ -1475,7 +1474,6 @@ static void t8030_create_sio(MachineState* machine)
     uint32_t *ints;
     DTBProp *prop;
     uint64_t *reg;
-    uint64_t data;
     T8030MachineState *tms = T8030_MACHINE(machine);
     SysBusDevice *sio;
     AppleDARTState *dart;
@@ -1485,7 +1483,6 @@ static void t8030_create_sio(MachineState* machine)
     IOMMUMemoryRegion *dma_mr = NULL;
     DTBNode *dart_sio = find_dtb_node(child, "dart-sio");
     DTBNode *dart_sio_mapper = find_dtb_node(dart_sio, "mapper-sio");
-    Object *obj;
 
     assert(child != NULL);
     child = find_dtb_node(child, "sio");
@@ -1735,6 +1732,13 @@ static void t8030_machine_init(MachineState *machine)
     child = get_dtb_node(tms->device_tree, "product");
     /* TODO: SEP, iOS 15 data encryption */
     set_dtb_prop(child, "product-name", 8, "FastSim");
+    uint64_t data64 = 0x100000027;
+    assert(set_dtb_prop(child, "display-corner-radius", 8, &data64));
+    data = 0x1;
+    assert(set_dtb_prop(child, "oled-display", 4, &data));
+    assert(set_dtb_prop(child, "graphics-featureset-class", 7, "MTL1,2"));
+    assert(set_dtb_prop(child, "graphics-featureset-fallbacks", 15, "MTL1,2:GLES2,0"));
+    assert(set_dtb_prop(tms->device_tree, "target-type", 4, "sim")); // TODO: implement PMP
 
     t8030_cpu_setup(machine);
 
