@@ -98,7 +98,7 @@ static const char *REM_PROPS[] = {
     "soc-tuning", "mcc-power-gating", "function-mcc_dataset",
     "function-dock_parent", "function-brightness_update",
     "function-lcd_enable", "function-bw_req_interrupt0",
-    "function-bw_req_interrupt1",
+    "function-bw_req_interrupt1", "function-dapf_enable",
 };
 
 static void allocate_and_copy(MemoryRegion *mem, AddressSpace *as,
