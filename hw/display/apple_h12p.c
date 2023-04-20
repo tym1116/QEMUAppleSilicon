@@ -21,6 +21,8 @@
 static void h12p_up_write(void *opaque, hwaddr addr, uint64_t data, unsigned size)
 {
     AppleH12PState *s = APPLE_H12P(opaque);
+    if (addr >= 0x200000) { addr -= 0x200000; }
+    info_report("h12p_up_write: 0x" TARGET_FMT_plx " <- 0x" TARGET_FMT_plx, addr, data);
     switch (addr) {
         case REG_GENPIPE0_PLANE_START:
             s->genpipe0_plane_start = (uint32_t)data;
@@ -29,18 +31,22 @@ static void h12p_up_write(void *opaque, hwaddr addr, uint64_t data, unsigned siz
         case REG_GENPIPE0_PLANE_END:
             s->genpipe0_plane_end = (uint32_t)data;
             info_report("plane end: 0x" TARGET_FMT_plx, data);
+            s->frame_processed = false;
+            break;
+        case REG_UPPIPE_INT_FILTER:
+            s->uppipe_int_filter &= ~(uint32_t)data;
             break;
         default:
             *(uint32_t *)&s->regs[addr] = (uint32_t)data;
             break;
     }
-    // info_report("h12p_up_write: 0x" TARGET_FMT_plx " <- 0x" TARGET_FMT_plx, addr, data);
 }
 
 static uint64_t h12p_up_read(void *opaque, hwaddr addr, unsigned size)
 {
     AppleH12PState *s = APPLE_H12P(opaque);
     uint64_t ret = 0;
+    if (addr >= 0x200000) { addr -= 0x200000; }
     switch (addr) {
         case REG_UPPIPE_VER:
             ret = 0x70045;
@@ -60,15 +66,17 @@ static uint64_t h12p_up_read(void *opaque, hwaddr addr, unsigned size)
         case REG_GENPIPE1_FRAME_SIZE:
             QEMU_FALLTHROUGH;
         case REG_UPPIPE_FRAME_SIZE:
-            QEMU_FALLTHROUGH;
-        case REG_UP_CONFIG_FRAME_SIZE:
             ret = (s->width << 16) | s->height;
+            break;
+        case REG_UPPIPE_INT_FILTER:
+            ret = s->uppipe_int_filter;
+            qemu_irq_lower(s->irqs[0]);
             break;
         default:
             ret = *(uint32_t *)&s->regs[addr];
             break;
     }
-    // info_report("h12p_up_read: 0x" TARGET_FMT_plx " -> 0x" TARGET_FMT_plx, addr, ret);
+    info_report("h12p_up_read: 0x" TARGET_FMT_plx " -> 0x" TARGET_FMT_plx, addr, ret);
     return ret;
 }
 
@@ -122,6 +130,15 @@ void apple_h12p_create(MachineState *machine)
     sysbus_mmio_map(sbd, 0, tms->soc_base_pa + reg[0]);
     object_property_add_const_link(OBJECT(sbd), "up.regs", OBJECT(&s->up_regs));
 
+    prop = find_dtb_prop(child, "interrupts");
+    assert(prop);
+    uint32_t *ints = (uint32_t *)prop->value;
+
+    for (size_t i = 0; i < prop->length / sizeof(uint32_t); i++) {
+        sysbus_init_irq(sbd, &s->irqs[i]);
+        sysbus_connect_irq(sbd, i, qdev_get_gpio_in(DEVICE(tms->aic), ints[i]));
+    }
+
     AppleDARTState *dart = APPLE_DART(object_property_get_link(OBJECT(machine), "dart-disp0", &error_fatal));
     assert(dart);
     child = find_dtb_node(armio, "dart-disp0");
@@ -160,7 +177,6 @@ static void h12p_draw_row(void *opaque, uint8_t *dest, const uint8_t *src, int w
 
 static void h12p_gfx_update(void *opaque)
 {
-    RCU_READ_LOCK_GUARD();
     AppleH12PState *s = APPLE_H12P(opaque);
     DisplaySurface *surface = qemu_console_surface(s->console);
 
@@ -178,19 +194,24 @@ static void h12p_gfx_update(void *opaque)
         return;
     }
 
-    size_t size = s->genpipe0_plane_end - s->genpipe0_plane_start;
-    g_autofree uint8_t *buf = g_malloc(size);
-    if (dma_memory_read(&s->dma_as, s->genpipe0_plane_start, buf, size, MEMTXATTRS_UNSPECIFIED) != MEMTX_OK) {
-        return;
+    if (!s->frame_processed) {
+        size_t size = s->genpipe0_plane_end - s->genpipe0_plane_start;
+        g_autofree uint8_t *buf = g_malloc(size);
+        if (dma_memory_read(&s->dma_as, s->genpipe0_plane_start, buf, size, MEMTXATTRS_UNSPECIFIED) != MEMTX_OK) {
+            return;
+        }
+        
+        uint8_t *dest = surface_data(surface);
+        for (size_t i = 0; i < s->height; i++) {
+            h12p_draw_row(s, dest, buf + i * stride, s->width, 0);
+            dest += stride;
+        }
+    
+        dpy_gfx_update_full(s->console);
+        s->uppipe_int_filter |= (1UL << 10) | (1UL << 19) | (1UL << 20);
+        qemu_irq_raise(s->irqs[0]);
+        s->frame_processed = true;
     }
-
-    uint8_t *dest = surface_data(surface);
-    for (size_t i = 0; i < s->height; i++) {
-        h12p_draw_row(s, dest, buf + i * stride, s->width, 0);
-        dest += stride;
-    }
-
-    dpy_gfx_update_full(s->console);
 }
 
 static const GraphicHwOps apple_h12p_ops = {
