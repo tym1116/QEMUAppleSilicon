@@ -121,6 +121,7 @@ void apple_h12p_create(MachineState *machine)
     assert(set_dtb_prop(child, "display-timing-info", 8 * sizeof(uint32_t), &dispTimingInfo));
     uint32_t data = 0xD;
     assert(set_dtb_prop(child, "bics-param-set", 4, &data));
+    assert(set_dtb_prop(child, "function-brightness_update", 0, ""));
 
     DTBProp *prop = find_dtb_prop(child, "reg");
     assert(prop);
