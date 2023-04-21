@@ -1738,9 +1738,6 @@ static void t8030_machine_init(MachineState *machine)
     assert(set_dtb_prop(child, "oled-display", 4, &data));
     assert(set_dtb_prop(child, "graphics-featureset-class", 7, "MTL1,2"));
     assert(set_dtb_prop(child, "graphics-featureset-fallbacks", 15, "MTL1,2:GLES2,0"));
-    assert(set_dtb_prop(child, "display-backlight-compensation", 12, "syscfg/DBCl"));
-    assert(set_dtb_prop(child, "display-temp-compensation", 12, "syscfg/DTCl"));
-    assert(set_dtb_prop(child, "primary-calibration-matrix", 12, "syscfg/DPCl"));
     assert(set_dtb_prop(tms->device_tree, "target-type", 4, "sim")); // TODO: implement PMP
 
     t8030_cpu_setup(machine);
