@@ -1674,7 +1674,7 @@ static void t8030_machine_init(MachineState *machine)
     tms->device_tree = load_dtb_from_file(machine->dtb);
     tms->trustcache = load_trustcache_from_file(tms->trustcache_filename,
                                                 &tms->bootinfo.trustcache_size);
-    data = 24000000;
+    data = 266666666;
     set_dtb_prop(tms->device_tree, "clock-frequency", 4, &data);
     child = find_dtb_node(tms->device_tree, "arm-io");
     assert(child != NULL);
@@ -1683,8 +1683,6 @@ static void t8030_machine_init(MachineState *machine)
     set_dtb_prop(child, "chip-revision", 4, &data);
 
     set_dtb_prop(child, "clock-frequencies", sizeof(clock_freq), clock_freq);
-    set_dtb_prop(child, "clock-frequencies-nclk", sizeof(clock_freq_nclk),
-                 clock_freq_nclk);
 
     prop = find_dtb_prop(child, "ranges");
     assert(prop != NULL);
