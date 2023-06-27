@@ -35,6 +35,7 @@ OBJECT_DECLARE_SIMPLE_TYPE(AppleH12PState, APPLE_H12P);
 #define REG_GENPIPE0_FRAME_SIZE       (0x50080)
 #define REG_GENPIPE1_FRAME_SIZE       (0x58080)
 #define REG_UPPIPE_INT_FILTER         (0x45818)
+#define REG_PCC_SOFT_RESET            (0xB0130)
 
 struct AppleH12PState {
     /*< private >*/

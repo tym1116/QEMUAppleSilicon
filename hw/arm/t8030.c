@@ -1674,7 +1674,7 @@ static void t8030_machine_init(MachineState *machine)
     tms->device_tree = load_dtb_from_file(machine->dtb);
     tms->trustcache = load_trustcache_from_file(tms->trustcache_filename,
                                                 &tms->bootinfo.trustcache_size);
-    data = 266666666;
+    data = 24000000;
     set_dtb_prop(tms->device_tree, "clock-frequency", 4, &data);
     child = find_dtb_node(tms->device_tree, "arm-io");
     assert(child != NULL);
@@ -1683,6 +1683,8 @@ static void t8030_machine_init(MachineState *machine)
     set_dtb_prop(child, "chip-revision", 4, &data);
 
     set_dtb_prop(child, "clock-frequencies", sizeof(clock_freq), clock_freq);
+    set_dtb_prop(child, "clock-frequencies-nclk", sizeof(clock_freq_nclk),
+                 clock_freq_nclk);
 
     prop = find_dtb_prop(child, "ranges");
     assert(prop != NULL);
@@ -1731,12 +1733,11 @@ static void t8030_machine_init(MachineState *machine)
     /* TODO: SEP, iOS 15 data encryption */
     set_dtb_prop(child, "product-name", 8, "FastSim");
     uint64_t data64 = 0x100000027;
-    assert(set_dtb_prop(child, "display-corner-radius", 8, &data64));
+    assert(set_dtb_prop(child, "display-corner-radius", sizeof(data64), &data64));
     data = 0x1;
-    assert(set_dtb_prop(child, "oled-display", 4, &data));
+    assert(set_dtb_prop(child, "oled-display", sizeof(data), &data));
     assert(set_dtb_prop(child, "graphics-featureset-class", 7, "MTL1,2"));
     assert(set_dtb_prop(child, "graphics-featureset-fallbacks", 15, "MTL1,2:GLES2,0"));
-    assert(set_dtb_prop(tms->device_tree, "target-type", 4, "sim")); // TODO: implement PMP
 
     t8030_cpu_setup(machine);
 

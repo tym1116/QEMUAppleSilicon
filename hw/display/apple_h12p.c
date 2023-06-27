@@ -31,10 +31,12 @@ static void h12p_up_write(void *opaque, hwaddr addr, uint64_t data, unsigned siz
         case REG_GENPIPE0_PLANE_END:
             s->genpipe0_plane_end = (uint32_t)data;
             info_report("plane end: 0x" TARGET_FMT_plx, data);
-            s->frame_processed = false;
             break;
         case REG_UPPIPE_INT_FILTER:
             s->uppipe_int_filter &= ~(uint32_t)data;
+            break;
+        case REG_PCC_SOFT_RESET:
+            info_report("PCC SOFT RESET!");
             break;
         default:
             *(uint32_t *)&s->regs[addr] = (uint32_t)data;
@@ -70,6 +72,7 @@ static uint64_t h12p_up_read(void *opaque, hwaddr addr, unsigned size)
             break;
         case REG_UPPIPE_INT_FILTER:
             ret = s->uppipe_int_filter;
+            s->frame_processed = false;
             qemu_irq_lower(s->irqs[0]);
             break;
         default:
@@ -109,8 +112,8 @@ void apple_h12p_create(MachineState *machine)
         tms->video.v_display = 0;
     }
 
-    *(uint32_t *)&s->regs[REG_GENPIPE0_BLACK_FRAME] = -1;
-    *(uint32_t *)&s->regs[REG_GENPIPE1_BLACK_FRAME] = -1;
+    // *(uint32_t *)&s->regs[REG_GENPIPE0_BLACK_FRAME] = -1;
+    // *(uint32_t *)&s->regs[REG_GENPIPE1_BLACK_FRAME] = -1;
 
     DTBNode *armio = find_dtb_node(tms->device_tree, "arm-io");
     assert(armio);
@@ -118,9 +121,9 @@ void apple_h12p_create(MachineState *machine)
     assert(child);
     assert(set_dtb_prop(child, "display-target", 15, "DisplayTarget5"));
     uint32_t dispTimingInfo[] = {0x33C, 0x90, 0x1, 0x1, 0x700, 0x1, 0x1, 0x1};
-    assert(set_dtb_prop(child, "display-timing-info", 8 * sizeof(uint32_t), &dispTimingInfo));
+    assert(set_dtb_prop(child, "display-timing-info", sizeof(dispTimingInfo), &dispTimingInfo));
     uint32_t data = 0xD;
-    assert(set_dtb_prop(child, "bics-param-set", 4, &data));
+    assert(set_dtb_prop(child, "bics-param-set", sizeof(data), &data));
     assert(set_dtb_prop(child, "function-brightness_update", 0, ""));
 
     DTBProp *prop = find_dtb_prop(child, "reg");
@@ -128,7 +131,7 @@ void apple_h12p_create(MachineState *machine)
     uint64_t *reg = (uint64_t *)prop->value;
     memory_region_init_io(&s->up_regs, OBJECT(sbd), &h12p_up_ops, sbd, "up.regs", reg[1]);
     sysbus_init_mmio(sbd, &s->up_regs);
-    sysbus_mmio_map(sbd, 0, tms->soc_base_pa + reg[0]);
+    sysbus_mmio_map_overlap(sbd, 0, tms->soc_base_pa + reg[0], 1);
     object_property_add_const_link(OBJECT(sbd), "up.regs", OBJECT(&s->up_regs));
 
     prop = find_dtb_prop(child, "interrupts");
@@ -199,15 +202,16 @@ static void h12p_gfx_update(void *opaque)
         size_t size = s->genpipe0_plane_end - s->genpipe0_plane_start;
         g_autofree uint8_t *buf = g_malloc(size);
         if (dma_memory_read(&s->dma_as, s->genpipe0_plane_start, buf, size, MEMTXATTRS_UNSPECIFIED) != MEMTX_OK) {
+            error_report("Failed to read framebuffer");
             return;
         }
-        
+
         uint8_t *dest = surface_data(surface);
         for (size_t i = 0; i < s->height; i++) {
             h12p_draw_row(s, dest, buf + i * stride, s->width, 0);
             dest += stride;
         }
-    
+
         dpy_gfx_update_full(s->console);
         s->uppipe_int_filter |= (1UL << 10) | (1UL << 19) | (1UL << 20);
         qemu_irq_raise(s->irqs[0]);
