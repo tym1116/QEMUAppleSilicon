@@ -22,21 +22,21 @@ static void h12p_up_write(void *opaque, hwaddr addr, uint64_t data, unsigned siz
 {
     AppleH12PState *s = APPLE_H12P(opaque);
     if (addr >= 0x200000) { addr -= 0x200000; }
-    info_report("h12p_up_write: 0x" TARGET_FMT_plx " <- 0x" TARGET_FMT_plx, addr, data);
+    info_report("[H12P] 0x" TARGET_FMT_plx " <- 0x" TARGET_FMT_plx, addr, data);
     switch (addr) {
         case REG_GENPIPE0_PLANE_START:
             s->genpipe0_plane_start = (uint32_t)data;
-            info_report("plane start: 0x" TARGET_FMT_plx, data);
+            info_report("[H12P] plane0 start: 0x" TARGET_FMT_plx, data);
             break;
         case REG_GENPIPE0_PLANE_END:
             s->genpipe0_plane_end = (uint32_t)data;
-            info_report("plane end: 0x" TARGET_FMT_plx, data);
+            info_report("[H12P] plane0 end: 0x" TARGET_FMT_plx, data);
             break;
         case REG_UPPIPE_INT_FILTER:
             s->uppipe_int_filter &= ~(uint32_t)data;
             break;
         case REG_PCC_SOFT_RESET:
-            info_report("PCC SOFT RESET!");
+            info_report("[H12P] PCC SOFT RESET!");
             break;
         default:
             *(uint32_t *)&s->regs[addr] = (uint32_t)data;
@@ -79,7 +79,7 @@ static uint64_t h12p_up_read(void *opaque, hwaddr addr, unsigned size)
             ret = *(uint32_t *)&s->regs[addr];
             break;
     }
-    info_report("h12p_up_read: 0x" TARGET_FMT_plx " -> 0x" TARGET_FMT_plx, addr, ret);
+    info_report("[H12P] 0x" TARGET_FMT_plx " -> 0x" TARGET_FMT_plx, addr, ret);
     return ret;
 }
 
@@ -112,8 +112,8 @@ void apple_h12p_create(MachineState *machine)
         tms->video.v_display = 0;
     }
 
-    // *(uint32_t *)&s->regs[REG_GENPIPE0_BLACK_FRAME] = -1;
-    // *(uint32_t *)&s->regs[REG_GENPIPE1_BLACK_FRAME] = -1;
+    *(uint32_t *)&s->regs[REG_GENPIPE0_BLACK_FRAME] = -1;
+    *(uint32_t *)&s->regs[REG_GENPIPE1_BLACK_FRAME] = -1;
 
     DTBNode *armio = find_dtb_node(tms->device_tree, "arm-io");
     assert(armio);
@@ -131,7 +131,7 @@ void apple_h12p_create(MachineState *machine)
     uint64_t *reg = (uint64_t *)prop->value;
     memory_region_init_io(&s->up_regs, OBJECT(sbd), &h12p_up_ops, sbd, "up.regs", reg[1]);
     sysbus_init_mmio(sbd, &s->up_regs);
-    sysbus_mmio_map_overlap(sbd, 0, tms->soc_base_pa + reg[0], 1);
+    sysbus_mmio_map(sbd, 0, tms->soc_base_pa + reg[0]);
     object_property_add_const_link(OBJECT(sbd), "up.regs", OBJECT(&s->up_regs));
 
     prop = find_dtb_prop(child, "interrupts");
