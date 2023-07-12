@@ -18,9 +18,6 @@
 #include "net/net.h"
 #include "qemu/cutils.h"
 #include "qemu/datadir.h"
-#include "net/net.h"
-
-#define MAX_IDE_BUS 2
 
 static uint64_t cpu_alpha_superpage_to_phys(void *opaque, uint64_t addr)
 {

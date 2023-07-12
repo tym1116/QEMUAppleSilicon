@@ -177,7 +177,7 @@ static void apple_spmi_queue_reg_write(void *opaque, hwaddr addr,
     bool qflg = false;
 #ifdef DEBUG_SPMI
     qemu_log_mask(LOG_UNIMP, "%s: %s @ 0x"
-    TARGET_FMT_plx " value: 0x" TARGET_FMT_plx "\n", DEVICE(s)->id,
+    HWADDR_FMT_plx " value: 0x" HWADDR_FMT_plx "\n", DEVICE(s)->id,
     __func__, addr, data);
 #endif
 
@@ -304,7 +304,7 @@ static uint64_t apple_spmi_queue_reg_read(void *opaque,
         apple_spmi_update_irq(s);
     }
 #ifdef DEBUG_SPMI
-    qemu_log_mask(LOG_UNIMP, "%s: %s @ 0x" TARGET_FMT_plx ": 0x%x\n",
+    qemu_log_mask(LOG_UNIMP, "%s: %s @ 0x" HWADDR_FMT_plx ": 0x%x\n",
                   DEVICE(s)->id, __func__, addr, value);
 #endif
     return value;
@@ -341,7 +341,7 @@ static uint64_t apple_spmi_control_read(void *opaque, hwaddr addr, unsigned size
         apple_spmi_update_irq(s);
     }
 #ifdef DEBUG_SPMI
-    qemu_log_mask(LOG_UNIMP, "%s: %s @ 0x" TARGET_FMT_plx ": 0x%x\n", __func__,
+    qemu_log_mask(LOG_UNIMP, "%s: %s @ 0x" HWADDR_FMT_plx ": 0x%x\n", __func__,
                   DEVICE(s)->id, addr, value);
 #endif
     return value;
@@ -357,7 +357,7 @@ static void apple_spmi_control_write(void *opaque, hwaddr addr,
     bool qflg = false;
 #ifdef DEBUG_SPMI
     qemu_log_mask(LOG_UNIMP, "%s: %s @ 0x"
-    TARGET_FMT_plx " value: 0x" TARGET_FMT_plx "\n",
+    HWADDR_FMT_plx " value: 0x" HWADDR_FMT_plx "\n",
     DEVICE(s)->id, __func__, addr, data);
 #endif
 
@@ -418,7 +418,7 @@ static uint64_t apple_spmi_fault_read(void *opaque, hwaddr addr, unsigned size)
         apple_spmi_update_irq(s);
     }
 #ifdef DEBUG_SPMI
-    qemu_log_mask(LOG_UNIMP, "%s: %s @ 0x" TARGET_FMT_plx ": 0x%x\n", __func__,
+    qemu_log_mask(LOG_UNIMP, "%s: %s @ 0x" HWADDR_FMT_plx ": 0x%x\n", __func__,
                   DEVICE(s)->id, addr, value);
 #endif
     return value;
@@ -434,7 +434,7 @@ static void apple_spmi_fault_write(void *opaque, hwaddr addr,
     bool qflg = false;
 #ifdef DEBUG_SPMI
     qemu_log_mask(LOG_UNIMP, "%s: %s @ 0x"
-    TARGET_FMT_plx " value: 0x" TARGET_FMT_plx "\n",
+    HWADDR_FMT_plx " value: 0x" HWADDR_FMT_plx "\n",
     DEVICE(s)->id, __func__, addr, data);
 #endif
 

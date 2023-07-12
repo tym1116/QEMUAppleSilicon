@@ -17,6 +17,7 @@
 #include "tcp-usb.h"
 #include "qemu/cutils.h"
 #include "sysemu/iothread.h"
+#include "qemu/lockable.h"
 
 //#define DEBUG_DEV_TCP_REMOTE
 
@@ -248,7 +249,7 @@ static bool usb_tcp_remote_read_one(USBTCPRemoteState *s)
                         __func__, rhdr.pid, rhdr.ep, rhdr.id);
             //__builtin_dump_struct(&rhdr, &printf);
             /* likely canceled */
-            /* When an EP is aborted, all of its queued packets are removed */ 
+            /* When an EP is aborted, all of its queued packets are removed */
         }
 
         if (rhdr.length > 0 && rhdr.status != USB_RET_ASYNC) {

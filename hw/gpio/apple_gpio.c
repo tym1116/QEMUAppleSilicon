@@ -301,7 +301,7 @@ static void apple_gpio_reg_write(void *opaque,
     case rGPIOCFG(0) ... rGPIOCFG(GPIO_MAX_PIN_NR - 1):
         if ((data & FUNC_MASK) > FUNC_ALT0) {
             qemu_log_mask(LOG_UNIMP,
-                            "%s: alternate function " TARGET_FMT_plx " is not supported\n",
+                            "%s: alternate function " HWADDR_FMT_plx " is not supported\n",
                             __func__, ((data & FUNC_MASK) >> FUNC_SHIFT) - 1);
         }
         return apple_gpio_cfg_write(s, (addr - rGPIOCFG(0)) >> 2, addr, data);
@@ -314,7 +314,7 @@ static void apple_gpio_reg_write(void *opaque,
     default:
         qemu_log_mask(LOG_GUEST_ERROR,
                     "%s: Bad offset 0x%" HWADDR_PRIx
-                    ": " TARGET_FMT_plx "\n", __func__, addr, data);
+                    ": " HWADDR_FMT_plx "\n", __func__, addr, data);
         break;
     }
 }

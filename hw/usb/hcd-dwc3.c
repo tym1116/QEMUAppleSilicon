@@ -897,7 +897,7 @@ static void usb_dwc3_glbreg_write(void *ptr, hwaddr addr, int index,
     case GCTL:
         if (!(old & GCTL_CORESOFTRESET) &&
             (val & GCTL_CORESOFTRESET)) {
-            qdev_reset_all_fn(s);
+            device_cold_reset(DEVICE(s));
         }
         break;
     case GSTS:

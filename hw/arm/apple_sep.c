@@ -22,7 +22,7 @@ OBJECT_DECLARE_SIMPLE_TYPE(AppleSEPState, APPLE_SEP)
 
 #define SEP_LOG_MSG(ep, msg) \
 do { qemu_log_mask(LOG_GUEST_ERROR, "SEP: message:" \
-                   " ep=%u msg=0x" TARGET_FMT_plx "\n", \
+                   " ep=%u msg=0x" HWADDR_FMT_plx "\n", \
                    ep, msg); } while (0)
 
 enum {

@@ -30,7 +30,7 @@ OBJECT_DECLARE_SIMPLE_TYPE(AppleANSState, APPLE_ANS)
 
 #define ANS_LOG_MSG(ep, msg) \
 do { qemu_log_mask(LOG_GUEST_ERROR, "ANS2: message:" \
-                   " ep=%u msg=0x" TARGET_FMT_plx, \
+                   " ep=%u msg=0x" HWADDR_FMT_plx, \
                    ep, msg); } while (0)
 
 #define NVME_APPLE_MAX_PEND_CMDS		0x1210
@@ -70,7 +70,7 @@ static void ascv2_core_reg_write(void *opaque, hwaddr addr,
                   unsigned size)
 {
     DPRINTF("ANS2: AppleASCWrapV2 core reg WRITE @ 0x"
-                  TARGET_FMT_plx " value: 0x" TARGET_FMT_plx "\n", addr, data);
+                  HWADDR_FMT_plx " value: 0x" HWADDR_FMT_plx "\n", addr, data);
 }
 
 static uint64_t ascv2_core_reg_read(void *opaque,
@@ -78,7 +78,7 @@ static uint64_t ascv2_core_reg_read(void *opaque,
                      unsigned size)
 {
     DPRINTF("ANS2: AppleASCWrapV2 core reg READ @ 0x"
-                  TARGET_FMT_plx "\n", addr);
+                  HWADDR_FMT_plx "\n", addr);
     return 0;
 }
 
@@ -99,13 +99,13 @@ static void iop_autoboot_reg_write(void *opaque,
                   unsigned size)
 {
     DPRINTF("ANS2: AppleA7IOP autoboot reg WRITE @ 0x"
-                  TARGET_FMT_plx " value: 0x" TARGET_FMT_plx "\n", addr, data);
+                  HWADDR_FMT_plx " value: 0x" HWADDR_FMT_plx "\n", addr, data);
 }
 
 static uint64_t iop_autoboot_reg_read(void *opaque, hwaddr addr, unsigned size)
 {
     DPRINTF("ANS2: AppleA7IOP autoboot reg READ @ 0x"
-                  TARGET_FMT_plx "\n", addr);
+                  HWADDR_FMT_plx "\n", addr);
     return 0;
 }
 
@@ -121,7 +121,7 @@ static void apple_ans_vendor_reg_write(void *opaque, hwaddr addr,
     AppleANSState *s = APPLE_ANS(opaque);
     uint32_t *mmio = &s->vendor_reg[addr >> 2];
     DPRINTF("ANS2: vendor reg WRITE @ 0x"
-                  TARGET_FMT_plx " value: 0x" TARGET_FMT_plx "\n", addr, data);
+                  HWADDR_FMT_plx " value: 0x" HWADDR_FMT_plx "\n", addr, data);
     *mmio = data;
 }
 
@@ -134,7 +134,7 @@ static uint64_t apple_ans_vendor_reg_read(void *opaque,
     uint32_t val = *mmio;
 
     DPRINTF("ANS2: vendor reg READ @ 0x"
-                  TARGET_FMT_plx "\n", addr);
+                  HWADDR_FMT_plx "\n", addr);
     switch (addr) {
         case NVME_APPLE_MAX_PEND_CMDS:
             val = NVME_APPLE_MAX_PEND_CMDS_VAL;

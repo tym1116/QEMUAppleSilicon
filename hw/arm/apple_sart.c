@@ -104,8 +104,8 @@ static void base_reg_write(void *opaque, hwaddr addr,
     AppleSARTState *s = APPLE_SART(opaque);
     uint32_t orig;
     uint32_t val = data;
-    DPRINTF("%s: %s @ 0x" TARGET_FMT_plx
-            " value: 0x" TARGET_FMT_plx "\n", DEVICE(s)->id,
+    DPRINTF("%s: %s @ 0x" HWADDR_FMT_plx
+            " value: 0x" HWADDR_FMT_plx "\n", DEVICE(s)->id,
             __func__, addr, data);
 
     orig = s->reg[addr >> 2];
@@ -141,7 +141,7 @@ static uint64_t base_reg_read(void *opaque,
                               unsigned size)
 {
     AppleSARTState *s = APPLE_SART(opaque);
-    DPRINTF("%s: %s @ 0x"TARGET_FMT_plx"\n", DEVICE(s)->id,
+    DPRINTF("%s: %s @ 0x" HWADDR_FMT_plx"\n", DEVICE(s)->id,
             __func__, addr);
 
     return s->reg[addr >> 2];

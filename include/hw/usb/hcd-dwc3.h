@@ -24,6 +24,7 @@
 #ifndef HCD_DWC3_H
 #define HCD_DWC3_H
 
+#include "hw/register.h"
 #include "qemu/queue.h"
 #include "sysemu/dma.h"
 #include "hw/usb/hcd-xhci.h"

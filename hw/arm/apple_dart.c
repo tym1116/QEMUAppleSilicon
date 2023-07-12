@@ -223,8 +223,8 @@ static void base_reg_write(void *opaque, hwaddr addr,
     uint32_t orig;
     uint32_t val = data;
     bool iflg = 0;
-    DPRINTF("%s[%d]: (%s) %s @ 0x" TARGET_FMT_plx
-            " value: 0x" TARGET_FMT_plx "\n", s->name, o->id,
+    DPRINTF("%s[%d]: (%s) %s @ 0x" HWADDR_FMT_plx
+            " value: 0x" HWADDR_FMT_plx "\n", s->name, o->id,
             dart_instance_name[o->type], __func__, addr, data);
 
     orig = o->base_reg[addr >> 2];
@@ -280,7 +280,7 @@ static uint64_t base_reg_read(void *opaque,
                               unsigned size)
 {
     AppleDARTInstance *o = (AppleDARTInstance *)opaque;
-    DPRINTF("%s[%d]: (%s) %s @ 0x"TARGET_FMT_plx"\n", o->s->name, o->id,
+    DPRINTF("%s[%d]: (%s) %s @ 0x" HWADDR_FMT_plx"\n", o->s->name, o->id,
             dart_instance_name[o->type], __func__, addr);
 
     if (o->type == DART_DART) {
@@ -337,7 +337,7 @@ static AppleDARTTLBEntry *apple_dart_ptw(AppleDARTInstance *o, uint32_t sid,
             pte = 0;
             break;
         }
-        DPRINTF("%s: level: %d, pa: 0x"TARGET_FMT_plx
+        DPRINTF("%s: level: %d, pa: 0x" HWADDR_FMT_plx
                 " pte: 0x%llx(0x%llx)\n", __func__, level, pa, pte, idx);
 
         if ((pte & DART_TTE_VALID) == 0) {
@@ -418,7 +418,7 @@ static IOMMUTLBEntry apple_dart_translate(IOMMUMemoryRegion *mr, hwaddr addr,
         if (tlb_entry) {
             g_hash_table_insert(o->tlb, GUINT_TO_POINTER(key), tlb_entry);
             DPRINTF("%s[%d]: (%s) SID %u: 0x"
-                    TARGET_FMT_plx " -> 0x" TARGET_FMT_plx " (%c%c)\n",
+                    HWADDR_FMT_plx " -> 0x" HWADDR_FMT_plx " (%c%c)\n",
                     s->name, o->id, dart_instance_name[o->type],
                     iommu->sid, addr,
                     tlb_entry->block_addr | (addr & s->page_bits),
@@ -454,7 +454,7 @@ static IOMMUTLBEntry apple_dart_translate(IOMMUMemoryRegion *mr, hwaddr addr,
 
 end:
     DPRINTF("%s[%d]: (%s) SID %u: 0x"
-            TARGET_FMT_plx " -> 0x" TARGET_FMT_plx " (%c%c)\n",
+            HWADDR_FMT_plx " -> 0x" HWADDR_FMT_plx " (%c%c)\n",
             s->name, o->id, dart_instance_name[o->type],
             iommu->sid, entry.iova,
             entry.translated_addr,
@@ -645,12 +645,12 @@ AppleDARTState *apple_dart_create(DTBNode *node)
     return s;
 }
 
-static void apple_dart_dump_pt(Monitor *mon, AppleDARTInstance *o, hwaddr iova, 
+static void apple_dart_dump_pt(Monitor *mon, AppleDARTInstance *o, hwaddr iova,
                                uint64_t *entries, int level, uint64_t pte)
 {
     AppleDARTState *s = o->s;
     if (level == 3) {
-        monitor_printf(mon, "\t\t\t0x%llx ... 0x%llx -> 0x%llx %c%c\n", 
+        monitor_printf(mon, "\t\t\t0x%llx ... 0x%llx -> 0x%llx %c%c\n",
                        iova << s->page_shift, (iova + 1) << s->page_shift,
                        pte & s->page_mask & DART_TTE_ADDR_MASK,
                        pte & DART_TTE_NO_READ ? '-' : 'r',
@@ -741,7 +741,7 @@ void hmp_info_dart(Monitor *mon, const QDict *qdict)
                 uint64_t l0_entries[4] = { o->ttbr[sid][0], o->ttbr[sid][1],
                                            o->ttbr[sid][2], o->ttbr[sid][3] };
                 apple_dart_dump_pt(mon, o, 0, l0_entries, 0, 0);
-                
+
             }
         }
     }

@@ -27,15 +27,15 @@ static void i2c_reg_write(void *opaque,
                   uint64_t data,
                   unsigned size)
 {
-    qemu_log_mask(LOG_UNIMP, "I2C: reg WRITE @ 0x" TARGET_FMT_plx
-                  " value: 0x" TARGET_FMT_plx "\n", addr, data);
+    qemu_log_mask(LOG_UNIMP, "I2C: reg WRITE @ 0x" HWADDR_FMT_plx
+                  " value: 0x" HWADDR_FMT_plx "\n", addr, data);
 }
 
 static uint64_t i2c_reg_read(void *opaque,
                      hwaddr addr,
                      unsigned size)
 {
-    qemu_log_mask(LOG_UNIMP, "I2C: reg READ @ 0x" TARGET_FMT_plx "\n", addr);
+    qemu_log_mask(LOG_UNIMP, "I2C: reg READ @ 0x" HWADDR_FMT_plx "\n", addr);
 
     return 0;
 }

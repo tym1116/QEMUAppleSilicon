@@ -278,7 +278,7 @@ void gd_gl_area_scanout_flush(DisplayChangeListener *dcl,
 {
     VirtualConsole *vc = container_of(dcl, VirtualConsole, gfx.dcl);
 
-    if (vc->gfx.guest_fb.dmabuf) {
+    if (vc->gfx.guest_fb.dmabuf && !vc->gfx.guest_fb.dmabuf->draw_submitted) {
         graphic_hw_gl_block(vc->gfx.dcl.con, true);
         vc->gfx.guest_fb.dmabuf->draw_submitted = true;
     }
@@ -298,8 +298,9 @@ void gd_gl_area_scanout_dmabuf(DisplayChangeListener *dcl,
     }
 
     gd_gl_area_scanout_texture(dcl, dmabuf->texture,
-                               false, dmabuf->width, dmabuf->height,
-                               0, 0, dmabuf->width, dmabuf->height);
+                               dmabuf->y0_top, dmabuf->width, dmabuf->height,
+                               dmabuf->x, dmabuf->y, dmabuf->scanout_width,
+                               dmabuf->scanout_height);
 
     if (dmabuf->allow_fences) {
         vc->gfx.guest_fb.dmabuf = dmabuf;

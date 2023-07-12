@@ -28,6 +28,7 @@
 #include "qapi/error.h"
 #include "qemu/datadir.h"
 #include "cpu.h"
+#include "hw/irq.h"
 #include "hw/pci/pci.h"
 #include "hw/pci/pci_bridge.h"
 #include "hw/pci/pci_bus.h"
@@ -66,7 +67,6 @@
 #define PBM_PCI_IO_BASE      (PBM_SPECIAL_BASE + 0x02000000ULL)
 #define PROM_FILENAME        "openbios-sparc64"
 #define NVRAM_SIZE           0x2000
-#define MAX_IDE_BUS          2
 #define BIOS_CFG_IOPORT      0x510
 #define FW_CFG_SPARC64_WIDTH (FW_CFG_ARCH_LOCAL + 0x00)
 #define FW_CFG_SPARC64_HEIGHT (FW_CFG_ARCH_LOCAL + 0x01)
@@ -85,7 +85,8 @@ struct EbusState {
     PCIDevice parent_obj;
 
     ISABus *isa_bus;
-    qemu_irq isa_bus_irqs[ISA_NUM_IRQS];
+    qemu_irq *isa_irqs_in;
+    qemu_irq isa_irqs_out[ISA_NUM_IRQS];
     uint64_t console_serial_base;
     MemoryRegion bar0;
     MemoryRegion bar1;
@@ -288,7 +289,7 @@ static const TypeInfo power_info = {
 static void ebus_isa_irq_handler(void *opaque, int n, int level)
 {
     EbusState *s = EBUS(opaque);
-    qemu_irq irq = s->isa_bus_irqs[n];
+    qemu_irq irq = s->isa_irqs_out[n];
 
     /* Pass ISA bus IRQs onto their gpio equivalent */
     trace_ebus_isa_irq_handler(n, level);
@@ -304,7 +305,6 @@ static void ebus_realize(PCIDevice *pci_dev, Error **errp)
     ISADevice *isa_dev;
     SysBusDevice *sbd;
     DeviceState *dev;
-    qemu_irq *isa_irq;
     DriveInfo *fd[MAX_FD];
     int i;
 
@@ -316,9 +316,9 @@ static void ebus_realize(PCIDevice *pci_dev, Error **errp)
     }
 
     /* ISA bus */
-    isa_irq = qemu_allocate_irqs(ebus_isa_irq_handler, s, ISA_NUM_IRQS);
-    isa_bus_irqs(s->isa_bus, isa_irq);
-    qdev_init_gpio_out_named(DEVICE(s), s->isa_bus_irqs, "isa-irq",
+    s->isa_irqs_in = qemu_allocate_irqs(ebus_isa_irq_handler, s, ISA_NUM_IRQS);
+    isa_bus_register_input_irqs(s->isa_bus, s->isa_irqs_in);
+    qdev_init_gpio_out_named(DEVICE(s), s->isa_irqs_out, "isa-irq",
                              ISA_NUM_IRQS);
 
     /* Serial ports */

@@ -157,7 +157,7 @@ static void sprr_perm_el0_write(CPUARMState *env, const ARMCPRegInfo *ri, uint64
 
     raw_write(env, ri, perm);
 
-    tlb_flush_by_mmuidx(env_cpu(env), ARMMMUIdxBit_SE10_0 | ARMMMUIdxBit_E10_0);
+    tlb_flush_by_mmuidx(env_cpu(env), ARMMMUIdxBit_E10_0);
 }
 
 static uint64_t gxf_cpreg_raw_read(CPUARMState *env, const ARMCPRegInfo *ri)

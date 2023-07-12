@@ -115,8 +115,8 @@ static void apple_i2c_reg_write(void *opaque,
     AppleI2CState *s = APPLE_I2C(opaque);
     DeviceState *dev = DEVICE(opaque);
     #ifdef DEBUG_APPLE_I2C
-    qemu_log_mask(LOG_UNIMP, "%s: reg WRITE @ 0x" TARGET_FMT_plx
-                             " value: 0x" TARGET_FMT_plx "\n", dev->id, addr, data);
+    qemu_log_mask(LOG_UNIMP, "%s: reg WRITE @ 0x" HWADDR_FMT_plx
+                             " value: 0x" HWADDR_FMT_plx "\n", dev->id, addr, data);
     #endif
 
     uint32_t *mmio = (uint32_t *)&s->reg[addr];
@@ -237,7 +237,7 @@ static uint64_t apple_i2c_reg_read(void *opaque,
     }
 
     #ifdef DEBUG_APPLE_I2C
-    qemu_log_mask(LOG_UNIMP, "%s: reg READ @ 0x" TARGET_FMT_plx
+    qemu_log_mask(LOG_UNIMP, "%s: reg READ @ 0x" HWADDR_FMT_plx
                              " value: 0x%x\n", DEVICE(s)->id, addr, value);
     #endif
     return value;

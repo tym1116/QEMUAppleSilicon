@@ -20,7 +20,7 @@ OBJECT_DECLARE_SIMPLE_TYPE(AppleSMCState, APPLE_SMC_IOP)
 #ifdef DEBUG_SMC
 #define SMC_LOG_MSG(ep, msg) \
 do { qemu_log_mask(LOG_GUEST_ERROR, "SMC: message:" \
-                   " ep=%u msg=0x" TARGET_FMT_plx "\n", \
+                   " ep=%u msg=0x" HWADDR_FMT_plx "\n", \
                    ep, msg); } while (0)
 #else
 #define SMC_LOG_MSG(ep, msg) do {} while (0)
@@ -434,7 +434,7 @@ static void ascv2_core_reg_write(void *opaque, hwaddr addr,
                   unsigned size)
 {
     qemu_log_mask(LOG_UNIMP, "SMC: AppleASCWrapV2 core reg WRITE @ 0x"
-                  TARGET_FMT_plx " value: 0x" TARGET_FMT_plx "\n", addr, data);
+                  HWADDR_FMT_plx " value: 0x" HWADDR_FMT_plx "\n", addr, data);
 }
 
 static uint64_t ascv2_core_reg_read(void *opaque,
@@ -442,7 +442,7 @@ static uint64_t ascv2_core_reg_read(void *opaque,
                      unsigned size)
 {
     qemu_log_mask(LOG_UNIMP, "SMC: AppleASCWrapV2 core reg READ @ 0x"
-                  TARGET_FMT_plx "\n", addr);
+                  HWADDR_FMT_plx "\n", addr);
     return 0;
 }
 

@@ -285,7 +285,7 @@ static void s8000_create_aic(MachineState *machine)
     S8000MachineState *tms = S8000_MACHINE(machine);
     DTBNode *soc = find_dtb_node(tms->device_tree, "arm-io");
     DTBNode *child;
-    DTBNode *timebase; 
+    DTBNode *timebase;
 
     assert(soc != NULL);
     child = find_dtb_node(soc, "aic");
@@ -709,16 +709,16 @@ static void apple_a9_reset(void *opaque)
     }
 }
 
-static void s8000_machine_reset(MachineState* machine)
+static void s8000_machine_reset(MachineState* machine, ShutdownCause reason)
 {
     S8000MachineState *tms = S8000_MACHINE(machine);
     DeviceState *gpio = NULL;
 
-    qemu_devices_reset();
+    qemu_devices_reset(reason);
     if (!runstate_check(RUN_STATE_RESTORE_VM)
         && !runstate_check(RUN_STATE_PRELAUNCH)) {
         if (!runstate_check(RUN_STATE_PAUSED)
-            || qemu_reset_requested_get() != SHUTDOWN_CAUSE_NONE) {
+            || reason != SHUTDOWN_CAUSE_NONE) {
             s8000_memory_setup(MACHINE(tms));
         }
     }

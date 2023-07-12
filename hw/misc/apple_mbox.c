@@ -11,15 +11,15 @@
 
 #define IOP_LOG_MSG(s, msg) \
 do { qemu_log_mask(LOG_GUEST_ERROR, "%s: message:" \
-                   " type=0x%x ep=%u QWORD0=0x" TARGET_FMT_plx \
-                   " QWORD1=0x" TARGET_FMT_plx " ep0_state=0x%x\n", \
+                   " type=0x%x ep=%u QWORD0=0x" HWADDR_FMT_plx \
+                   " QWORD1=0x" HWADDR_FMT_plx " ep0_state=0x%x\n", \
                    s->role, msg->mgmt_msg.type, msg->endpoint, \
                    msg->data[0], msg->data[1], \
                    s->ep0_status); } while (0)
 
 #define IOP_LOG_MGMT_MSG(s, msg) \
 do { qemu_log_mask(LOG_GUEST_ERROR, "%s: message:" \
-                   " ep=0 QWORD0=0x" TARGET_FMT_plx \
+                   " ep=0 QWORD0=0x" HWADDR_FMT_plx \
                    " ep0_state=0x%x\n", \
                    s->role, \
                    msg->raw, \
@@ -591,7 +591,7 @@ static void apple_mbox_reg_write(void *opaque, hwaddr addr,
             default:
                 qemu_log_mask(LOG_GUEST_ERROR,
                               "%s: AppleA7IOP AKF unknown reg WRITE @ 0x"
-                              TARGET_FMT_plx " value: 0x" TARGET_FMT_plx "\n",
+                              HWADDR_FMT_plx " value: 0x" HWADDR_FMT_plx "\n",
                               s->role, addr, data);
                 break;
         }
@@ -656,7 +656,7 @@ static uint64_t apple_mbox_reg_read(void *opaque, hwaddr addr,
             break;
         default:
             qemu_log_mask(LOG_UNIMP, "%s: AppleA7IOP AKF unknown reg READ @ 0x"
-                                     TARGET_FMT_plx "\n", s->role, addr);
+                                     HWADDR_FMT_plx "\n", s->role, addr);
             break;
         }
     }
@@ -721,7 +721,7 @@ static void apple_mbox_v2_reg_write(void *opaque, hwaddr addr,
             default:
                 qemu_log_mask(LOG_GUEST_ERROR,
                               "%s: AppleA7IOP AKF unknown reg WRITE @ 0x"
-                              TARGET_FMT_plx " value: 0x" TARGET_FMT_plx "\n",
+                              HWADDR_FMT_plx " value: 0x" HWADDR_FMT_plx "\n",
                               s->role, addr, data);
                 break;
         }
@@ -779,7 +779,7 @@ static uint64_t apple_mbox_v2_reg_read(void *opaque, hwaddr addr,
             break;
         default:
             qemu_log_mask(LOG_UNIMP, "%s: AppleA7IOP AKF unknown reg READ @ 0x"
-                                     TARGET_FMT_plx "\n", s->role, addr);
+                                     HWADDR_FMT_plx "\n", s->role, addr);
             break;
         }
     }
@@ -829,7 +829,7 @@ static void apple_mbox_iop_reg_write(void *opaque, hwaddr addr,
             default:
                 qemu_log_mask(LOG_GUEST_ERROR,
                               "%s: AppleA7IOP AKF unknown IOP reg WRITE @ 0x"
-                              TARGET_FMT_plx " value: 0x" TARGET_FMT_plx "\n",
+                              HWADDR_FMT_plx " value: 0x" HWADDR_FMT_plx "\n",
                               s->role, addr, data);
                 break;
         }
@@ -888,7 +888,7 @@ static uint64_t apple_mbox_iop_reg_read(void *opaque, hwaddr addr,
             break;
         default:
             qemu_log_mask(LOG_UNIMP, "%s: AppleA7IOP AKF unknown IOP reg READ @ 0x"
-                                     TARGET_FMT_plx " ret: 0x%08x\n",
+                                     HWADDR_FMT_plx " ret: 0x%08x\n",
                                      s->role, addr, ret);
             break;
         }

@@ -13,6 +13,7 @@
 #include "target/arm/cpregs.h"
 #include "arm-powerctl.h"
 #include "sysemu/reset.h"
+#include "qemu/error-report.h"
 
 #define VMSTATE_A9_CPREG(name) \
         VMSTATE_UINT64(A9_CPREG_VAR_NAME(name), AppleA9State)

@@ -56,7 +56,7 @@ static void apple_otg_realize(DeviceState *dev, Error **errp)
         s->dma_mr = g_new(MemoryRegion, 1);
         memory_region_init_alias(s->dma_mr, OBJECT(dev),
                                  TYPE_APPLE_OTG ".dma-mr", get_system_memory(),
-                                 0x800000000, UINT32_MAX); 
+                                 0x800000000, UINT32_MAX);
         memory_region_add_subregion(&s->dma_container_mr, 0, s->dma_mr);
         s->dart = false;
     }
@@ -74,8 +74,8 @@ static void apple_otg_realize(DeviceState *dev, Error **errp)
 static void apple_otg_reset(DeviceState *dev)
 {
     AppleOTGState *s = APPLE_OTG(dev);
-    qdev_reset_all_fn(DEVICE(&s->dwc2));
-    qdev_reset_all_fn(&s->usbhcd);
+    device_cold_reset(DEVICE(&s->dwc2));
+    device_cold_reset(&s->usbhcd);
 }
 
 static void phy_reg_write(void *opaque,
@@ -83,7 +83,7 @@ static void phy_reg_write(void *opaque,
                   uint64_t data,
                   unsigned size)
 {
-    qemu_log_mask(LOG_UNIMP, "OTG: phy reg WRITE @ 0x" TARGET_FMT_plx " value: 0x" TARGET_FMT_plx "\n", addr, data);
+    qemu_log_mask(LOG_UNIMP, "OTG: phy reg WRITE @ 0x" HWADDR_FMT_plx " value: 0x" HWADDR_FMT_plx "\n", addr, data);
 
     AppleOTGState *s = APPLE_OTG(opaque);
     memcpy(s->phy_reg + addr, &data, size);
@@ -93,7 +93,7 @@ static uint64_t phy_reg_read(void *opaque,
                      hwaddr addr,
                      unsigned size)
 {
-    qemu_log_mask(LOG_UNIMP, "OTG: phy reg READ @ 0x" TARGET_FMT_plx "\n", addr);
+    qemu_log_mask(LOG_UNIMP, "OTG: phy reg READ @ 0x" HWADDR_FMT_plx "\n", addr);
     AppleOTGState *s = APPLE_OTG(opaque);
     uint64_t val = 0;
 
@@ -111,7 +111,7 @@ static void usbctl_reg_write(void *opaque,
                   uint64_t data,
                   unsigned size)
 {
-    qemu_log_mask(LOG_UNIMP, "OTG: usbctl reg WRITE @ 0x" TARGET_FMT_plx " value: 0x" TARGET_FMT_plx "\n", addr, data);
+    qemu_log_mask(LOG_UNIMP, "OTG: usbctl reg WRITE @ 0x" HWADDR_FMT_plx " value: 0x" HWADDR_FMT_plx "\n", addr, data);
     AppleOTGState *s = APPLE_OTG(opaque);
 
     memcpy(s->usbctl_reg + addr, &data, size);
@@ -121,7 +121,7 @@ static uint64_t usbctl_reg_read(void *opaque,
                      hwaddr addr,
                      unsigned size)
 {
-    qemu_log_mask(LOG_UNIMP, "OTG: usbctl reg READ @ 0x" TARGET_FMT_plx "\n", addr);
+    qemu_log_mask(LOG_UNIMP, "OTG: usbctl reg READ @ 0x" HWADDR_FMT_plx "\n", addr);
     AppleOTGState *s = APPLE_OTG(opaque);
     uint64_t val = 0;
 
@@ -143,7 +143,7 @@ static void widget_reg_write(void *opaque,
     uint32_t value = data;
     bool dma_changed = false;
 
-    qemu_log_mask(LOG_UNIMP, "OTG: widget reg WRITE @ 0x" TARGET_FMT_plx " value: 0x" TARGET_FMT_plx "\n", addr, data);
+    qemu_log_mask(LOG_UNIMP, "OTG: widget reg WRITE @ 0x" HWADDR_FMT_plx " value: 0x" HWADDR_FMT_plx "\n", addr, data);
     switch (addr) {
     case rAUSB_WIDGET_OTG_ADDR:
         if (value & (1 << 8)) {
@@ -168,7 +168,7 @@ static uint64_t widget_reg_read(void *opaque,
                      hwaddr addr,
                      unsigned size)
 {
-    qemu_log_mask(LOG_UNIMP, "OTG: widget reg READ @ 0x" TARGET_FMT_plx "\n", addr);
+    qemu_log_mask(LOG_UNIMP, "OTG: widget reg READ @ 0x" HWADDR_FMT_plx "\n", addr);
     AppleOTGState *s = APPLE_OTG(opaque);
     uint64_t val = 0;
 

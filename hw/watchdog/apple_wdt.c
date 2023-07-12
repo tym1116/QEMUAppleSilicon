@@ -293,11 +293,6 @@ SysBusDevice *apple_wdt_create(DTBNode *node)
     return sbd;
 }
 
-static WatchdogTimerModel model = {
-    .wdt_name = "apple_wdt",
-    .wdt_description = "Apple WDT",
-};
-
 static const VMStateDescription vmstate_apple_wdt = {
     .name = "apple_wdt",
     .fields = (VMStateField[]) {
@@ -321,7 +316,7 @@ static void apple_wdt_class_init(ObjectClass *klass, void *data)
     dc->reset = apple_wdt_reset;
     dc->desc = "Apple Watch Dog Timer";
     dc->vmsd = &vmstate_apple_wdt;
-    set_bit(DEVICE_CATEGORY_MISC, dc->categories);
+    set_bit(DEVICE_CATEGORY_WATCHDOG, dc->categories);
 }
 
 static const TypeInfo apple_wdt_info = {
@@ -333,7 +328,6 @@ static const TypeInfo apple_wdt_info = {
 
 static void apple_wdt_register_types(void)
 {
-    watchdog_add_model(&model);
     type_register_static(&apple_wdt_info);
 }
 

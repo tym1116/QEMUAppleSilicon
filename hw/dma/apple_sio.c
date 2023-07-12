@@ -19,7 +19,7 @@
 #ifdef DEBUG_SIO
 #define SIO_LOG_MSG(ep, msg) \
 do { qemu_log_mask(LOG_GUEST_ERROR, "SIO: message:" \
-                   " ep=%u msg=0x" TARGET_FMT_plx "\n", \
+                   " ep=%u msg=0x" HWADDR_FMT_plx "\n", \
                    ep, msg); } while (0)
 #else
 #define SIO_LOG_MSG(ep, msg) do {} while (0)
@@ -335,7 +335,7 @@ static void ascv2_core_reg_write(void *opaque, hwaddr addr,
 {
 #ifdef DEBUG_SIO
     qemu_log_mask(LOG_UNIMP, "SIO: AppleASCWrapV2 core reg WRITE @ 0x"
-                  TARGET_FMT_plx " value: 0x" TARGET_FMT_plx "\n", addr, data);
+                  HWADDR_FMT_plx " value: 0x" HWADDR_FMT_plx "\n", addr, data);
 #endif
 }
 
@@ -345,7 +345,7 @@ static uint64_t ascv2_core_reg_read(void *opaque,
 {
 #ifdef DEBUG_SIO
     qemu_log_mask(LOG_UNIMP, "SIO: AppleASCWrapV2 core reg READ @ 0x"
-                  TARGET_FMT_plx "\n", addr);
+                  HWADDR_FMT_plx "\n", addr);
 #endif
     return 0;
 }

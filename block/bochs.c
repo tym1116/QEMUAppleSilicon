@@ -24,6 +24,7 @@
  */
 #include "qemu/osdep.h"
 #include "qapi/error.h"
+#include "block/block-io.h"
 #include "block/block_int.h"
 #include "qemu/module.h"
 #include "qemu/bswap.h"
@@ -110,10 +111,9 @@ static int bochs_open(BlockDriverState *bs, QDict *options, int flags,
         return ret;
     }
 
-    bs->file = bdrv_open_child(NULL, options, "file", bs, &child_of_bds,
-                               BDRV_CHILD_IMAGE, false, errp);
-    if (!bs->file) {
-        return -EINVAL;
+    ret = bdrv_open_file_child(NULL, options, "file", bs, errp);
+    if (ret < 0) {
+        return ret;
     }
 
     ret = bdrv_pread(bs->file, 0, sizeof(bochs), &bochs, 0);
@@ -237,7 +237,7 @@ static int64_t seek_to_sector(BlockDriverState *bs, int64_t sector_num)
     return bitmap_offset + (512 * (s->bitmap_blocks + extent_offset));
 }
 
-static int coroutine_fn
+static int coroutine_fn GRAPH_RDLOCK
 bochs_co_preadv(BlockDriverState *bs, int64_t offset, int64_t bytes,
                 QEMUIOVector *qiov, BdrvRequestFlags flags)
 {

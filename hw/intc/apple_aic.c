@@ -389,7 +389,7 @@ static void apple_aic_write(void *opaque, hwaddr addr, uint64_t data,
             break;
 
         default:
-            qemu_log_mask(LOG_UNIMP, "AIC: Write to unspported reg 0x" TARGET_FMT_plx
+            qemu_log_mask(LOG_UNIMP, "AIC: Write to unspported reg 0x" HWADDR_FMT_plx
                         " cpu %u: 0x%x\n", addr, o->cpu_id, val);
             break;
         }
@@ -506,12 +506,12 @@ static uint64_t apple_aic_read(void *opaque, hwaddr addr, unsigned size)
             }
         default: {
             if (addr == s->time_base + 0x20) {
-                return apple_aic_emulate_timer() & 0xFFFFFFFF; 
+                return apple_aic_emulate_timer() & 0xFFFFFFFF;
             } else if (addr == s->time_base + 0x28) {
-                return (apple_aic_emulate_timer() >> 32) & 0xFFFFFFFF; 
+                return (apple_aic_emulate_timer() >> 32) & 0xFFFFFFFF;
             } else {
                 qemu_log_mask(LOG_UNIMP,
-                          "AIC: Read from unspported reg 0x" TARGET_FMT_plx
+                          "AIC: Read from unspported reg 0x" HWADDR_FMT_plx
                           " cpu: %u\n", addr, o->cpu_id);
             }
         }

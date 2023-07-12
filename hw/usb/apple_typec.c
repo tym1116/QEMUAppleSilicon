@@ -52,9 +52,9 @@ static void apple_typec_realize(DeviceState *dev, Error **errp)
 static void apple_typec_reset(DeviceState *dev)
 {
     AppleTypeCState *s = APPLE_TYPEC(dev);
-    qdev_reset_all_fn(DEVICE(&s->dwc2));
-    qdev_reset_all_fn(DEVICE(&s->dwc3));
-    qdev_reset_all_fn(DEVICE(s->host));
+    device_cold_reset(DEVICE(&s->dwc2));
+    device_cold_reset(DEVICE(&s->dwc3));
+    device_cold_reset(DEVICE(s->host));
 }
 
 static void phy_reg_write(void *opaque,
@@ -62,7 +62,7 @@ static void phy_reg_write(void *opaque,
                   uint64_t data,
                   unsigned size)
 {
-    //qemu_log_mask(LOG_UNIMP, "ATC: phy reg WRITE @ 0x" TARGET_FMT_plx " value: 0x" TARGET_FMT_plx "\n", addr, data);
+    //qemu_log_mask(LOG_UNIMP, "ATC: phy reg WRITE @ 0x" HWADDR_FMT_plx " value: 0x" HWADDR_FMT_plx "\n", addr, data);
 
     AppleTypeCState *s = APPLE_TYPEC(opaque);
     memcpy(s->phy_reg + addr, &data, size);
@@ -72,7 +72,7 @@ static uint64_t phy_reg_read(void *opaque,
                      hwaddr addr,
                      unsigned size)
 {
-    //qemu_log_mask(LOG_UNIMP, "ATC: phy reg READ @ 0x" TARGET_FMT_plx "\n", addr);
+    //qemu_log_mask(LOG_UNIMP, "ATC: phy reg READ @ 0x" HWADDR_FMT_plx "\n", addr);
     AppleTypeCState *s = APPLE_TYPEC(opaque);
     uint64_t val = 0;
 
@@ -90,7 +90,7 @@ static void config_reg_write(void *opaque,
                   uint64_t data,
                   unsigned size)
 {
-    //qemu_log_mask(LOG_UNIMP, "ATC: config reg WRITE @ 0x" TARGET_FMT_plx " value: 0x" TARGET_FMT_plx "\n", addr, data);
+    //qemu_log_mask(LOG_UNIMP, "ATC: config reg WRITE @ 0x" HWADDR_FMT_plx " value: 0x" HWADDR_FMT_plx "\n", addr, data);
     //arm_cpu_backtrace();
 
     AppleTypeCState *s = APPLE_TYPEC(opaque);
@@ -101,7 +101,7 @@ static uint64_t config_reg_read(void *opaque,
                      hwaddr addr,
                      unsigned size)
 {
-    //qemu_log_mask(LOG_UNIMP, "ATC: config reg READ @ 0x" TARGET_FMT_plx "\n", addr);
+    //qemu_log_mask(LOG_UNIMP, "ATC: config reg READ @ 0x" HWADDR_FMT_plx "\n", addr);
     //arm_cpu_backtrace();
     AppleTypeCState *s = APPLE_TYPEC(opaque);
     uint64_t val = 0;

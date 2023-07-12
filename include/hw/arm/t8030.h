@@ -28,13 +28,14 @@
 
 #include "qemu/osdep.h"
 #include "exec/hwaddr.h"
-#include "hw/boards.h"
+#include "exec/memory.h"
+#include "hw/arm/apple_a13.h"
 #include "hw/arm/boot.h"
 #include "hw/arm/xnu.h"
-#include "exec/memory.h"
-#include "cpu.h"
+#include "hw/boards.h"
+#include "hw/sysbus.h"
 #include "sysemu/kvm.h"
-#include "hw/arm/apple_a13.h"
+#include "cpu.h"
 
 #define TYPE_T8030 "t8030"
 
@@ -43,8 +44,7 @@
 #define T8030_MACHINE(obj) \
     OBJECT_CHECK(T8030MachineState, (obj), TYPE_T8030_MACHINE)
 
-typedef struct
-{
+typedef struct {
     MachineClass parent;
 } T8030MachineClass;
 
@@ -55,8 +55,7 @@ typedef enum BootMode {
     kBootModeExitRecovery,
 } BootMode;
 
-typedef struct
-{
+typedef struct {
     MachineState parent;
     hwaddr soc_base_pa;
     hwaddr soc_size;
