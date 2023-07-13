@@ -320,7 +320,7 @@ static void h12p_gfx_update(void *opaque)
             &s->genpipe0, &s->dma_as, s->genpipe0.plane_stride, &size0);
         size_t size1 = 0;
         g_autofree uint8_t *buf1 = h12p_genpipe_read_fb(
-            &s->genpipe1, &s->dma_as, s->genpipe1.plane_stride, &size1);
+            &s->genpipe1, &s->dma_as, s->genpipe0.plane_stride, &size1);
 
         uint8_t *dest = surface_data(surface);
         for (size_t i = 0; i < s->height; i++) {
