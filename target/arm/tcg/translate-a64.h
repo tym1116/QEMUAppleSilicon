@@ -17,9 +17,6 @@
 
 #ifndef TARGET_ARM_TRANSLATE_A64_H
 #define TARGET_ARM_TRANSLATE_A64_H
-#include "qemu/osdep.h"
-#include "target/arm/tcg/translate.h"
-#include "tcg/tcg-op.h"
 
 TCGv_i64 cpu_reg(DisasContext *s, int reg);
 TCGv_i64 cpu_reg_sp(DisasContext *s, int reg);
@@ -67,10 +64,8 @@ static inline void assert_fp_access_checked(DisasContext *s)
 {
 #ifdef CONFIG_DEBUG_TCG
     if (unlikely(!s->fp_access_checked || s->fp_excp_el)) {
-        fprintf(stderr,
-                "target-arm: FP access check missing for "
-                "instruction 0x%08x\n",
-                s->insn);
+        fprintf(stderr, "target-arm: FP access check missing for "
+                "instruction 0x%08x\n", s->insn);
         abort();
     }
 #endif
@@ -80,8 +75,8 @@ static inline void assert_fp_access_checked(DisasContext *s)
  * size, 'element' places in from the least significant end of
  * the FP/vector register Qn.
  */
-static inline int vec_reg_offset(DisasContext *s, int regno, int element,
-                                 MemOp size)
+static inline int vec_reg_offset(DisasContext *s, int regno,
+                                 int element, MemOp size)
 {
     int element_size = 1 << size;
     int offs = element * element_size;
@@ -194,8 +189,8 @@ bool disas_sme(DisasContext *, uint32_t);
 void gen_gvec_rax1(unsigned vece, uint32_t rd_ofs, uint32_t rn_ofs,
                    uint32_t rm_ofs, uint32_t opr_sz, uint32_t max_sz);
 void gen_gvec_xar(unsigned vece, uint32_t rd_ofs, uint32_t rn_ofs,
-                  uint32_t rm_ofs, int64_t shift, uint32_t opr_sz,
-                  uint32_t max_sz);
+                  uint32_t rm_ofs, int64_t shift,
+                  uint32_t opr_sz, uint32_t max_sz);
 
 void gen_sve_ldr(DisasContext *s, TCGv_ptr, int vofs, int len, int rn, int imm);
 void gen_sve_str(DisasContext *s, TCGv_ptr, int vofs, int len, int rn, int imm);
