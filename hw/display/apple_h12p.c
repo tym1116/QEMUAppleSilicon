@@ -30,6 +30,93 @@
 #include "ui/pixel_ops.h"
 #include "framebuffer.h"
 
+static bool h12p_genpipe_write(GenPipeState *s, hwaddr addr, uint64_t data)
+{
+    if (addr < H12P_GENPIPE_BASE_FOR(s->index)) {
+        return false;
+    }
+    switch (addr - H12P_GENPIPE_BASE_FOR(s->index)) {
+    // case H12P_GENPIPE_BLACK_FRAME:
+    //     s->black_frame = (uint32_t)data;
+    //     return true;
+    case H12P_GENPIPE_PLANE_START:
+        s->plane_start = (uint32_t)data;
+        info_report("[H12P] GenPipe %zu: Plane Start <- 0x" HWADDR_FMT_plx,
+                    s->index, data);
+        return true;
+    case H12P_GENPIPE_PLANE_END:
+        s->plane_end = (uint32_t)data;
+        info_report("[H12P] GenPipe %zu: Plane End <- 0x" HWADDR_FMT_plx,
+                    s->index, data);
+        return true;
+    case H12P_GENPIPE_PLANE_STRIDE:
+        s->plane_stride = (uint32_t)data;
+        info_report("[H12P] GenPipe %zu: Plane Stride <- 0x" HWADDR_FMT_plx,
+                    s->index, data);
+        return true;
+    default:
+        break;
+    }
+    return false;
+}
+
+static bool h12p_genpipe_read(GenPipeState *s, hwaddr addr, uint64_t *data)
+{
+    if (addr < H12P_GENPIPE_BASE_FOR(s->index)) {
+        return false;
+    }
+    switch (addr - H12P_GENPIPE_BASE_FOR(s->index)) {
+    // case H12P_GENPIPE_BLACK_FRAME:
+    //     *data = s->black_frame;
+    //     return true;
+    case H12P_GENPIPE_PLANE_START:
+        *data = s->plane_start;
+        return true;
+    case H12P_GENPIPE_PLANE_END:
+        *data = s->plane_end;
+        return true;
+    case H12P_GENPIPE_PLANE_STRIDE:
+        *data = s->plane_stride;
+        return true;
+    case H12P_GENPIPE_PIXEL_FORMAT:
+        *data = GENPIPE_DFB_PIXEL_FORMAT_BGRA;
+        return true;
+    case H12P_GENPIPE_FRAME_SIZE:
+        *data = (s->width << 16) | s->height;
+        return true;
+    default:
+        break;
+    }
+    return false;
+}
+
+static uint8_t *h12p_genpipe_read_fb(GenPipeState *s, AddressSpace *dma_as,
+                                     uint32_t plane_stride, size_t *size_out)
+{
+    if (s->plane_start && s->plane_end && s->plane_stride && plane_stride) {
+        size_t size = s->plane_end - s->plane_start;
+        uint8_t *buf = g_malloc(size);
+        if (dma_memory_read(dma_as, s->plane_start, buf, size,
+                            MEMTXATTRS_UNSPECIFIED) == MEMTX_OK) {
+            *size_out = size;
+            return buf;
+        }
+    }
+    *size_out = 0;
+    return NULL;
+}
+
+static bool h12p_genpipe_init(GenPipeState *s, size_t index, uint32_t width,
+                              uint32_t height)
+{
+    memset(s, 0, sizeof(*s));
+    s->index = index;
+    s->width = width;
+    s->height = height;
+    return true;
+}
+
+
 static void h12p_up_write(void *opaque, hwaddr addr, uint64_t data,
                           unsigned size)
 {
@@ -37,40 +124,28 @@ static void h12p_up_write(void *opaque, hwaddr addr, uint64_t data,
     if (addr >= 0x200000) {
         addr -= 0x200000;
     }
+    if (h12p_genpipe_write(&s->genpipe0, addr, data)) {
+        info_report("[H12P] GenPipe 0: 0x" HWADDR_FMT_plx
+                    " <- 0x" HWADDR_FMT_plx,
+                    addr, data);
+        return;
+    }
+    if (h12p_genpipe_write(&s->genpipe1, addr, data)) {
+        info_report("[H12P] GenPipe 1: 0x" HWADDR_FMT_plx
+                    " <- 0x" HWADDR_FMT_plx,
+                    addr, data);
+        return;
+    }
     info_report("[H12P] 0x" HWADDR_FMT_plx " <- 0x" HWADDR_FMT_plx, addr, data);
     switch (addr) {
-    case REG_GENPIPE0_PLANE_START:
-        s->genpipe0_plane_start = (uint32_t)data;
-        info_report("[H12P] plane0 start: 0x" HWADDR_FMT_plx, data);
-        break;
-    case REG_GENPIPE0_PLANE_END:
-        s->genpipe0_plane_end = (uint32_t)data;
-        info_report("[H12P] plane0 end: 0x" HWADDR_FMT_plx, data);
-        break;
-    case REG_GENPIPE0_PLANE_STRIDE:
-        s->genpipe0_plane_stride = (uint32_t)data;
-        info_report("[H12P] plane0 stride: 0x" HWADDR_FMT_plx, data);
-        break;
-    case REG_GENPIPE1_PLANE_START:
-        s->genpipe1_plane_start = (uint32_t)data;
-        info_report("[H12P] plane1 start: 0x" HWADDR_FMT_plx, data);
-        break;
-    case REG_GENPIPE1_PLANE_END:
-        s->genpipe1_plane_end = (uint32_t)data;
-        info_report("[H12P] plane1 end: 0x" HWADDR_FMT_plx, data);
-        break;
-    case REG_GENPIPE1_PLANE_STRIDE:
-        s->genpipe1_plane_stride = (uint32_t)data;
-        info_report("[H12P] plane1 stride: 0x" HWADDR_FMT_plx, data);
-        break;
-    case REG_UPPIPE_INT_FILTER:
+    case H12P_UPPIPE_INT_FILTER:
         s->uppipe_int_filter &= ~(uint32_t)data;
+        s->frame_processed = false;
         break;
-    case REG_PCC_SOFT_RESET:
+    case H12P_PCC_SOFT_RESET:
         info_report("[H12P] PCC SOFT RESET!");
         break;
     default:
-        *(uint32_t *)&s->regs[addr] = (uint32_t)data;
         break;
     }
 }
@@ -82,47 +157,30 @@ static uint64_t h12p_up_read(void *opaque, hwaddr addr, unsigned size)
     if (addr >= 0x200000) {
         addr -= 0x200000;
     }
+    if (h12p_genpipe_read(&s->genpipe0, addr, &ret)) {
+        info_report("[H12P] GenPipe 0: 0x" HWADDR_FMT_plx
+                    " -> 0x" HWADDR_FMT_plx,
+                    addr, ret);
+        return ret;
+    }
+    if (h12p_genpipe_read(&s->genpipe1, addr, &ret)) {
+        info_report("[H12P] GenPipe 1: 0x" HWADDR_FMT_plx
+                    " -> 0x" HWADDR_FMT_plx,
+                    addr, ret);
+        return ret;
+    }
     switch (addr) {
-    case REG_UPPIPE_VER:
+    case H12P_UPPIPE_VER:
         ret = 0x70045;
         break;
-    case REG_GENPIPE0_PIXEL_FORMAT:
-        QEMU_FALLTHROUGH;
-    case REG_GENPIPE1_PIXEL_FORMAT:
-        ret = GENPIPE_DFB_PIXEL_FORMAT_BGRA;
-        break;
-    case REG_GENPIPE0_PLANE_START:
-        ret = s->genpipe0_plane_start;
-        break;
-    case REG_GENPIPE0_PLANE_END:
-        ret = s->genpipe0_plane_end;
-        break;
-    case REG_GENPIPE0_PLANE_STRIDE:
-        ret = s->genpipe0_plane_stride;
-        break;
-    case REG_GENPIPE1_PLANE_START:
-        ret = s->genpipe1_plane_start;
-        break;
-    case REG_GENPIPE1_PLANE_END:
-        ret = s->genpipe1_plane_end;
-        break;
-    case REG_GENPIPE1_PLANE_STRIDE:
-        ret = s->genpipe1_plane_stride;
-        break;
-    case REG_GENPIPE0_FRAME_SIZE:
-        QEMU_FALLTHROUGH;
-    case REG_GENPIPE1_FRAME_SIZE:
-        QEMU_FALLTHROUGH;
-    case REG_UPPIPE_FRAME_SIZE:
+    case H12P_UPPIPE_FRAME_SIZE:
         ret = (s->width << 16) | s->height;
         break;
-    case REG_UPPIPE_INT_FILTER:
+    case H12P_UPPIPE_INT_FILTER:
         ret = s->uppipe_int_filter;
-        s->frame_processed = false;
         qemu_irq_lower(s->irqs[0]);
         break;
     default:
-        ret = *(uint32_t *)&s->regs[addr];
         break;
     }
     info_report("[H12P] 0x" HWADDR_FMT_plx " -> 0x" HWADDR_FMT_plx, addr, ret);
@@ -157,9 +215,6 @@ void apple_h12p_create(MachineState *machine)
         xnu_contains_boot_arg(machine->kernel_cmdline, "-v", false)) {
         tms->video.v_display = 0;
     }
-
-    *(uint32_t *)&s->regs[REG_GENPIPE0_BLACK_FRAME] = -1;
-    *(uint32_t *)&s->regs[REG_GENPIPE1_BLACK_FRAME] = -1;
 
     DTBNode *armio = find_dtb_node(tms->device_tree, "arm-io");
     assert(armio);
@@ -242,7 +297,7 @@ static void h12p_gfx_update(void *opaque)
 
     int stride = s->width * sizeof(uint32_t);
 
-    if (!s->genpipe0_plane_start || !s->genpipe0_plane_end) {
+    if (!s->genpipe0.plane_start || !s->genpipe0.plane_end) {
         int first = 0, last = 0;
 
         if (!s->vram_section.mr) {
@@ -261,29 +316,11 @@ static void h12p_gfx_update(void *opaque)
 
     if (!s->frame_processed) {
         size_t size0 = 0;
-        g_autofree uint8_t *buf0 = NULL;
-        if (s->genpipe0_plane_start && s->genpipe0_plane_end &&
-            s->genpipe0_plane_stride) {
-            size0 = s->genpipe0_plane_end - s->genpipe0_plane_start;
-            buf0 = g_malloc(size0);
-            if (dma_memory_read(&s->dma_as, s->genpipe0_plane_start, buf0,
-                                size0, MEMTXATTRS_UNSPECIFIED) != MEMTX_OK) {
-                error_report("Failed to read framebuffer");
-                return;
-            }
-        }
+        g_autofree uint8_t *buf0 = h12p_genpipe_read_fb(
+            &s->genpipe0, &s->dma_as, s->genpipe0.plane_stride, &size0);
         size_t size1 = 0;
-        g_autofree uint8_t *buf1 = NULL;
-        if (s->genpipe1_plane_start && s->genpipe1_plane_end &&
-            s->genpipe1_plane_stride && s->genpipe0_plane_stride) {
-            size1 = s->genpipe1_plane_end - s->genpipe1_plane_start;
-            buf1 = g_malloc(size1);
-            if (dma_memory_read(&s->dma_as, s->genpipe1_plane_start, buf1,
-                                size1, MEMTXATTRS_UNSPECIFIED) != MEMTX_OK) {
-                error_report("Failed to read framebuffer2");
-                return;
-            }
-        }
+        g_autofree uint8_t *buf1 = h12p_genpipe_read_fb(
+            &s->genpipe1, &s->dma_as, s->genpipe1.plane_stride, &size1);
 
         uint8_t *dest = surface_data(surface);
         for (size_t i = 0; i < s->height; i++) {
@@ -310,10 +347,10 @@ static void apple_h12p_realize(DeviceState *dev, Error **errp)
 {
     AppleH12PState *s = APPLE_H12P(dev);
 
-    s->uppipe_int_filter = s->genpipe0_plane_start = s->genpipe0_plane_end =
-        s->genpipe0_plane_stride = s->genpipe1_plane_start =
-            s->genpipe1_plane_end = s->genpipe1_plane_stride =
-                s->frame_processed = 0;
+    s->uppipe_int_filter = 0;
+    s->frame_processed = false;
+    h12p_genpipe_init(&s->genpipe0, 0, s->width, s->height);
+    h12p_genpipe_init(&s->genpipe1, 1, s->width, s->height);
     s->console = graphic_console_init(dev, 0, &apple_h12p_ops, s);
     qemu_console_resize(s->console, s->width, s->height);
 }

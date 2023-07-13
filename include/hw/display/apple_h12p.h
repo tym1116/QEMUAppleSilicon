@@ -33,23 +33,31 @@
 #define TYPE_APPLE_H12P "apple-h12p"
 OBJECT_DECLARE_SIMPLE_TYPE(AppleH12PState, APPLE_H12P);
 
-#define REG_UPPIPE_VER (0x46020)
-#define REG_UPPIPE_FRAME_SIZE (0x4603C)
-#define REG_GENPIPE0_BLACK_FRAME (0x50004)
-#define REG_GENPIPE1_BLACK_FRAME (0x58004)
-#define REG_GENPIPE0_PIXEL_FORMAT (0x5001C)
-#define REG_GENPIPE1_PIXEL_FORMAT (0x5801C)
+#define H12P_UPPIPE_INT_FILTER (0x45818)
+#define H12P_UPPIPE_VER (0x46020)
+#define H12P_UPPIPE_FRAME_SIZE (0x4603C)
+
+#define H12P_GENPIPE_BASE (0x50000)
+#define H12P_GENPIPE_REG_SIZE (0x08000)
+#define H12P_GENPIPE_BLACK_FRAME (0x00004)
+#define H12P_GENPIPE_PIXEL_FORMAT (0x0001C)
 #define GENPIPE_DFB_PIXEL_FORMAT_BGRA (0x11110)
-#define REG_GENPIPE0_PLANE_START (0x50030)
-#define REG_GENPIPE0_PLANE_END (0x50040)
-#define REG_GENPIPE0_PLANE_STRIDE (0x50060)
-#define REG_GENPIPE1_PLANE_START (0x58030)
-#define REG_GENPIPE1_PLANE_END (0x58040)
-#define REG_GENPIPE1_PLANE_STRIDE (0x58060)
-#define REG_GENPIPE0_FRAME_SIZE (0x50080)
-#define REG_GENPIPE1_FRAME_SIZE (0x58080)
-#define REG_UPPIPE_INT_FILTER (0x45818)
-#define REG_PCC_SOFT_RESET (0xB0130)
+#define H12P_GENPIPE_PLANE_START (0x00030)
+#define H12P_GENPIPE_PLANE_END (0x00040)
+#define H12P_GENPIPE_PLANE_STRIDE (0x00060)
+#define H12P_GENPIPE_FRAME_SIZE (0x00080)
+
+#define H12P_PCC_SOFT_RESET (0xB0130)
+
+struct GenPipeState {
+    size_t index;
+    uint32_t width, height;
+    // uint32_t black_frame;
+    uint32_t plane_start, plane_end, plane_stride;
+};
+typedef struct GenPipeState GenPipeState;
+
+#define H12P_GENPIPE_BASE_FOR(i) (H12P_GENPIPE_BASE + i * H12P_GENPIPE_REG_SIZE)
 
 struct AppleH12PState {
     /*< private >*/
@@ -62,11 +70,9 @@ struct AppleH12PState {
     AddressSpace dma_as;
     MemoryRegionSection vram_section;
     qemu_irq irqs[9];
-    uint32_t uppipe_int_filter, genpipe0_plane_start, genpipe0_plane_end,
-        genpipe0_plane_stride, genpipe1_plane_start, genpipe1_plane_end,
-        genpipe1_plane_stride;
+    uint32_t uppipe_int_filter;
+    GenPipeState genpipe0, genpipe1;
     bool frame_processed;
-    uint8_t regs[0x200000];
     QemuConsole *console;
 };
 
