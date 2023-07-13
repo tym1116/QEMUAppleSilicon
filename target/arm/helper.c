@@ -1917,7 +1917,12 @@ static void scr_write(CPUARMState *env, const ARMCPRegInfo *ri, uint64_t value)
                                            ARMMMUIdxBit_E20_2 |
                                            ARMMMUIdxBit_E10_1_PAN |
                                            ARMMMUIdxBit_E20_2_PAN |
-                                           ARMMMUIdxBit_E2));
+                                           ARMMMUIdxBit_E2 |
+                                           ARMMMUIdxBit_GE10_1 |
+                                           ARMMMUIdxBit_GE20_2 |
+                                           ARMMMUIdxBit_GE10_1_PAN |
+                                           ARMMMUIdxBit_GE20_2_PAN |
+                                           ARMMMUIdxBit_GE2));
     }
 }
 
@@ -3567,7 +3572,7 @@ static void ats_write(CPUARMState *env, const ARMCPRegInfo *ri, uint64_t value)
         break;
     case 4:
         /* stage 1+2 NonSecure PL1: ATS12NSOPR, ATS12NSOPW */
-        mmu_idx = ARMMMUIdx_E10_1;
+        mmu_idx = (guarded ? ARMMMUIdx_GE10_1 : ARMMMUIdx_E10_1);
         secure = false;
         break;
     case 6:
@@ -3594,9 +3599,10 @@ static void ats1h_write(CPUARMState *env, const ARMCPRegInfo *ri,
 #ifdef CONFIG_TCG
     MMUAccessType access_type = ri->opc2 & 1 ? MMU_DATA_STORE : MMU_DATA_LOAD;
     uint64_t par64;
+    bool guarded = arm_is_guarded(env);
 
     /* There is no SecureEL2 for AArch32. */
-    par64 = do_ats_write(env, value, access_type, ARMMMUIdx_E2, false);
+    par64 = do_ats_write(env, value, access_type, (guarded ? ARMMMUIdx_GE2 : ARMMMUIdx_E2), false);
 
     A32_BANKED_CURRENT_REG_SET(env, par, par64);
 #else
@@ -3632,13 +3638,13 @@ static void ats_write64(CPUARMState *env, const ARMCPRegInfo *ri,
         case 0: /* AT S1E1R, AT S1E1W, AT S1E1RP, AT S1E1WP */
             if (ri->crm == 9 && (env->pstate & PSTATE_PAN)) {
                 mmu_idx =
-                    regime_e20 ? ARMMMUIdx_E20_2_PAN : (guarded ? ARMMMUIdx_Stage1_GE1_PAN : ARMMMUIdx_Stage1_E1_PAN);
+                    regime_e20 ? (guarded ? ARMMMUIdx_GE20_2_PAN : ARMMMUIdx_E20_2_PAN) : (guarded ? ARMMMUIdx_Stage1_GE1_PAN : ARMMMUIdx_Stage1_E1_PAN);
             } else {
-                mmu_idx = regime_e20 ? ARMMMUIdx_E20_2 : (guarded ? ARMMMUIdx_Stage1_GE1 : ARMMMUIdx_Stage1_E1);
+                mmu_idx = regime_e20 ? (guarded ? ARMMMUIdx_GE20_2 : ARMMMUIdx_E20_2) : (guarded ? ARMMMUIdx_Stage1_GE1 : ARMMMUIdx_Stage1_E1);
             }
             break;
         case 4: /* AT S1E2R, AT S1E2W */
-            mmu_idx = hcr_el2 & HCR_E2H ? ARMMMUIdx_E20_2 : (guarded ? ARMMMUIdx_GE2 : ARMMMUIdx_E2);
+            mmu_idx = hcr_el2 & HCR_E2H ? (guarded ? ARMMMUIdx_GE20_2 : ARMMMUIdx_E20_2) : (guarded ? ARMMMUIdx_GE2 : ARMMMUIdx_E2);
             break;
         case 6: /* AT S1E3R, AT S1E3W */
             mmu_idx = ARMMMUIdx_E3;
@@ -3652,7 +3658,7 @@ static void ats_write64(CPUARMState *env, const ARMCPRegInfo *ri,
         mmu_idx = regime_e20 ? ARMMMUIdx_E20_0 : ARMMMUIdx_Stage1_E0;
         break;
     case 4: /* AT S12E1R, AT S12E1W */
-        mmu_idx = regime_e20 ? ARMMMUIdx_E20_2 : (guarded ? ARMMMUIdx_GE10_1 : ARMMMUIdx_E10_1);
+        mmu_idx = regime_e20 ? (guarded ? ARMMMUIdx_GE20_2 : ARMMMUIdx_E20_2) : (guarded ? ARMMMUIdx_GE10_1 : ARMMMUIdx_E10_1);
         break;
     case 6: /* AT S12E0R, AT S12E0W */
         mmu_idx = regime_e20 ? ARMMMUIdx_E20_0 : ARMMMUIdx_E10_0;
@@ -4842,7 +4848,8 @@ static void tlbi_aa64_vae2is_write(CPUARMState *env, const ARMCPRegInfo *ri,
 {
     CPUState *cs = env_cpu(env);
     uint64_t pageaddr = sextract64(value << 12, 0, 56);
-    int bits = tlbbits_for_regime(env, ARMMMUIdx_E2, pageaddr);
+    bool guarded = arm_is_guarded(env);
+    int bits = tlbbits_for_regime(env, (guarded ? ARMMMUIdx_GE2 : ARMMMUIdx_E2), pageaddr);
 
     tlb_flush_page_bits_by_mmuidx_all_cpus_synced(cs, pageaddr,
                                                   ARMMMUIdxBit_E2 | ARMMMUIdxBit_GE2, bits);
@@ -11921,6 +11928,9 @@ int arm_mmu_idx_is_guarded(ARMMMUIdx mmu_idx)
         return true;
     default:
         return false;
+    case ARMMMUIdx_Stage1_GE1:
+    case ARMMMUIdx_Stage1_GE1_PAN:
+        g_assert_not_reached();
     }
 }
 

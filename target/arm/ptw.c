@@ -3119,6 +3119,8 @@ bool get_phys_addr(CPUARMState *env, target_ulong address,
     case ARMMMUIdx_GE2:
     case ARMMMUIdx_GE20_2:
     case ARMMMUIdx_GE20_2_PAN:
+    case ARMMMUIdx_Stage1_GE1:
+    case ARMMMUIdx_Stage1_GE1_PAN:
         is_secure = arm_is_secure_below_el3(env);
         break;
     case ARMMMUIdx_Stage2:
