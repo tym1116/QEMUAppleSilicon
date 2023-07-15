@@ -36,9 +36,9 @@ static bool h12p_genpipe_write(GenPipeState *s, hwaddr addr, uint64_t data)
         return false;
     }
     switch (addr - H12P_GENPIPE_BASE_FOR(s->index)) {
-    // case H12P_GENPIPE_BLACK_FRAME:
-    //     s->black_frame = (uint32_t)data;
-    //     return true;
+    case H12P_GP_CONFIG_CONTROL:
+        s->config_control = (uint32_t)data;
+        return true;
     case H12P_GENPIPE_PLANE_START:
         s->plane_start = (uint32_t)data;
         info_report("[H12P] GenPipe %zu: Plane Start <- 0x" HWADDR_FMT_plx,
@@ -66,9 +66,9 @@ static bool h12p_genpipe_read(GenPipeState *s, hwaddr addr, uint64_t *data)
         return false;
     }
     switch (addr - H12P_GENPIPE_BASE_FOR(s->index)) {
-    // case H12P_GENPIPE_BLACK_FRAME:
-    //     *data = s->black_frame;
-    //     return true;
+    case H12P_GP_CONFIG_CONTROL:
+        *data = s->config_control;
+        return true;
     case H12P_GENPIPE_PLANE_START:
         *data = s->plane_start;
         return true;
@@ -113,6 +113,7 @@ static bool h12p_genpipe_init(GenPipeState *s, size_t index, uint32_t width,
     s->index = index;
     s->width = width;
     s->height = height;
+    s->config_control = GP_CONFIG_CONTROL_ENABLED;
     return true;
 }
 
@@ -171,7 +172,7 @@ static uint64_t h12p_up_read(void *opaque, hwaddr addr, unsigned size)
     }
     switch (addr) {
     case H12P_UPPIPE_VER:
-        ret = 0x70045;
+        ret = UPPIPE_VER_A1;
         break;
     case H12P_UPPIPE_FRAME_SIZE:
         ret = (s->width << 16) | s->height;

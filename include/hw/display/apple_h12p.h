@@ -35,11 +35,14 @@ OBJECT_DECLARE_SIMPLE_TYPE(AppleH12PState, APPLE_H12P);
 
 #define H12P_UPPIPE_INT_FILTER (0x45818)
 #define H12P_UPPIPE_VER (0x46020)
+#define UPPIPE_VER_A1 (0x70045)
 #define H12P_UPPIPE_FRAME_SIZE (0x4603C)
 
 #define H12P_GENPIPE_BASE (0x50000)
 #define H12P_GENPIPE_REG_SIZE (0x08000)
-#define H12P_GENPIPE_BLACK_FRAME (0x00004)
+#define H12P_GP_CONFIG_CONTROL (0x00004)
+#define GP_CONFIG_CONTROL_ENABLED (1U << 31)
+#define GP_CONFIG_CONTROL_BLACK_FRAME (1U << 30)
 #define H12P_GENPIPE_PIXEL_FORMAT (0x0001C)
 #define GENPIPE_DFB_PIXEL_FORMAT_BGRA (0x11110)
 #define H12P_GENPIPE_PLANE_START (0x00030)
@@ -52,7 +55,7 @@ OBJECT_DECLARE_SIMPLE_TYPE(AppleH12PState, APPLE_H12P);
 struct GenPipeState {
     size_t index;
     uint32_t width, height;
-    // uint32_t black_frame;
+    uint32_t config_control;
     uint32_t plane_start, plane_end, plane_stride;
 };
 typedef struct GenPipeState GenPipeState;
