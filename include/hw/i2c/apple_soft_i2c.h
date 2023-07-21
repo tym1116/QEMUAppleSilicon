@@ -1,10 +1,10 @@
 #ifndef APPLE_SOFT_I2C_H
 #define APPLE_SOFT_I2C_H
 
-#include "hw/sysbus.h"
-#include "qom/object.h"
 #include "hw/arm/xnu_dtb.h"
 #include "hw/i2c/bitbang_i2c.h"
+#include "hw/sysbus.h"
+#include "qom/object.h"
 
 #define TYPE_APPLE_SOFT_I2C "apple.i2c.soft"
 OBJECT_DECLARE_SIMPLE_TYPE(AppleSoftI2CState, APPLE_SOFT_I2C)

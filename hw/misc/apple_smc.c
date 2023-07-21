@@ -1,35 +1,40 @@
 #include "qemu/osdep.h"
-#include "qapi/error.h"
-#include "hw/misc/apple_smc.h"
-#include "hw/misc/apple_mbox.h"
+#include "hw/arm/xnu.h"
+#include "hw/arm/xnu_dtb.h"
 #include "hw/irq.h"
+#include "hw/misc/apple_mbox.h"
+#include "hw/misc/apple_smc.h"
 #include "migration/vmstate.h"
+#include "qapi/error.h"
 #include "qemu/bitops.h"
 #include "qemu/log.h"
 #include "qemu/module.h"
 #include "qemu/queue.h"
 #include "sysemu/runstate.h"
-#include "hw/arm/xnu.h"
-#include "hw/arm/xnu_dtb.h"
 
 #define TYPE_APPLE_SMC_IOP "apple.smc"
 OBJECT_DECLARE_SIMPLE_TYPE(AppleSMCState, APPLE_SMC_IOP)
 
-//#define DEBUG_SMC
+// #define DEBUG_SMC
 
 #ifdef DEBUG_SMC
-#define SMC_LOG_MSG(ep, msg) \
-do { qemu_log_mask(LOG_GUEST_ERROR, "SMC: message:" \
-                   " ep=%u msg=0x" HWADDR_FMT_plx "\n", \
-                   ep, msg); } while (0)
+#define SMC_LOG_MSG(ep, msg)                               \
+    do {                                                   \
+        qemu_log_mask(LOG_GUEST_ERROR,                     \
+                      "SMC: message:"                      \
+                      " ep=%u msg=0x" HWADDR_FMT_plx "\n", \
+                      ep, msg);                            \
+    } while (0)
 #else
-#define SMC_LOG_MSG(ep, msg) do {} while (0)
+#define SMC_LOG_MSG(ep, msg) \
+    do {                     \
+    } while (0)
 #endif
 
-#define SMC_MAKE_IDENTIFIER(A, B, C, D)  \
-((uint32_t)(((uint32_t)(A) << 24U) | ((uint32_t)(B) << 16U) | \
-                                     ((uint32_t)(C) << 8U) | (uint32_t)(D)))
-#define SMC_MAKE_KEY_TYPE(A, B, C, D) SMC_MAKE_IDENTIFIER ((A), (B), (C), (D))
+#define SMC_MAKE_IDENTIFIER(A, B, C, D)                           \
+    ((uint32_t)(((uint32_t)(A) << 24U) | ((uint32_t)(B) << 16U) | \
+                ((uint32_t)(C) << 8U) | (uint32_t)(D)))
+#define SMC_MAKE_KEY_TYPE(A, B, C, D) SMC_MAKE_IDENTIFIER((A), (B), (C), (D))
 
 enum {
     SmcKeyTypeFlag = SMC_MAKE_KEY_TYPE('f', 'l', 'a', 'g'),
@@ -99,7 +104,7 @@ enum smc_notify {
     kSMCNotifySMCPanicProgress = 0x22,
 };
 
-#define kSMCKeyEndpoint     1
+#define kSMCKeyEndpoint 1
 
 struct QEMU_PACKED key_message {
     uint8_t cmd;
@@ -134,10 +139,10 @@ enum smc_attr {
 
 typedef struct smc_key smc_key;
 
-typedef uint8_t (*KeyReader)(AppleSMCState *s, smc_key *k,
-                             void *payload, uint8_t length);
-typedef uint8_t (*KeyWriter)(AppleSMCState *s, smc_key *k,
-                             void *payload, uint8_t length);
+typedef uint8_t (*KeyReader)(AppleSMCState *s, smc_key *k, void *payload,
+                             uint8_t length);
+typedef uint8_t (*KeyWriter)(AppleSMCState *s, smc_key *k, void *payload,
+                             uint8_t length);
 
 struct smc_key {
     uint32_t key;
@@ -162,7 +167,7 @@ struct AppleSMCState {
 static smc_key *smc_get_key(AppleSMCState *s, uint32_t key)
 {
     smc_key *d;
-    QTAILQ_FOREACH(d, &s->keys, entry) {
+    QTAILQ_FOREACH (d, &s->keys, entry) {
         if (d->key == key) {
             return d;
         }
@@ -224,14 +229,14 @@ static smc_key *smc_set_key(AppleSMCState *s, uint32_t key, uint32_t size,
     return k;
 }
 
-static uint8_t smc_key_reject_read(AppleSMCState *s, smc_key *k,
-                                   void *payload, uint8_t length)
+static uint8_t smc_key_reject_read(AppleSMCState *s, smc_key *k, void *payload,
+                                   uint8_t length)
 {
     return kSMCKeyNotReadable;
 }
 
-static uint8_t smc_key_reject_write(AppleSMCState *s, smc_key *k,
-                                    void *payload, uint8_t length)
+static uint8_t smc_key_reject_write(AppleSMCState *s, smc_key *k, void *payload,
+                                    uint8_t length)
 {
     return kSMCKeyNotWritable;
 }
@@ -249,8 +254,8 @@ static uint8_t G_GNUC_UNUSED smc_key_copy_write(AppleSMCState *s, smc_key *k,
     return kSMCSuccess;
 }
 
-static uint8_t smc_key_count_read(AppleSMCState *s, smc_key *k,
-                                  void *payload, uint8_t length)
+static uint8_t smc_key_count_read(AppleSMCState *s, smc_key *k, void *payload,
+                                  uint8_t length)
 {
     k->info.size = 4;
     k->data = g_realloc(k->data, 4);
@@ -258,8 +263,8 @@ static uint8_t smc_key_count_read(AppleSMCState *s, smc_key *k,
     return kSMCSuccess;
 }
 
-static uint8_t smc_key_mbse_write(AppleSMCState *s, smc_key *k,
-                                  void *payload, uint8_t length)
+static uint8_t smc_key_mbse_write(AppleSMCState *s, smc_key *k, void *payload,
+                                  uint8_t length)
 {
     uint32_t value;
     if (!payload || length != k->info.size) {
@@ -307,36 +312,35 @@ static uint8_t smc_key_mbse_write(AppleSMCState *s, smc_key *k,
     }
 }
 
-static uint8_t smc_key_lgpb_write(AppleSMCState *s, smc_key *k,
-                                  void *payload, uint8_t length)
+static uint8_t smc_key_lgpb_write(AppleSMCState *s, smc_key *k, void *payload,
+                                  uint8_t length)
 {
     /* fprintf(stderr, "LGPB: payload: 0x%x\n", *(uint8_t *)payload); */
     smc_set_key(s, k->key, length, payload);
     return kSMCSuccess;
 }
 
-static uint8_t smc_key_lgpe_write(AppleSMCState *s, smc_key *k,
-                                  void *payload, uint8_t length)
+static uint8_t smc_key_lgpe_write(AppleSMCState *s, smc_key *k, void *payload,
+                                  uint8_t length)
 {
     /* fprintf(stderr, "LGPE: payload: 0x%x\n", *(uint8_t *)payload); */
     smc_set_key(s, k->key, length, payload);
     return kSMCSuccess;
 }
 
-static uint8_t smc_key_nesn_write(AppleSMCState *s, smc_key *k,
-                                  void *payload, uint8_t length)
+static uint8_t smc_key_nesn_write(AppleSMCState *s, smc_key *k, void *payload,
+                                  uint8_t length)
 {
     key_response r = { 0 };
-    #if 0
+#if 0
     uint8_t *p = (uint8_t *)payload;
     fprintf(stderr, "NESN: payload: 0x%x\n", *(uint32_t *)payload);
-    #endif
+#endif
     smc_set_key(s, k->key, length, payload);
     return kSMCSuccess;
 }
 
-static void apple_smc_handle_key_endpoint(void *opaque,
-                                          uint32_t ep,
+static void apple_smc_handle_key_endpoint(void *opaque, uint32_t ep,
                                           uint64_t msg)
 {
     AppleSMCState *s = APPLE_SMC_IOP(opaque);
@@ -429,20 +433,20 @@ static void apple_smc_handle_key_endpoint(void *opaque,
     }
 }
 
-static void ascv2_core_reg_write(void *opaque, hwaddr addr,
-                  uint64_t data,
-                  unsigned size)
+static void ascv2_core_reg_write(void *opaque, hwaddr addr, uint64_t data,
+                                 unsigned size)
 {
-    qemu_log_mask(LOG_UNIMP, "SMC: AppleASCWrapV2 core reg WRITE @ 0x"
-                  HWADDR_FMT_plx " value: 0x" HWADDR_FMT_plx "\n", addr, data);
+    qemu_log_mask(LOG_UNIMP,
+                  "SMC: AppleASCWrapV2 core reg WRITE @ 0x" HWADDR_FMT_plx
+                  " value: 0x" HWADDR_FMT_plx "\n",
+                  addr, data);
 }
 
-static uint64_t ascv2_core_reg_read(void *opaque,
-                     hwaddr addr,
-                     unsigned size)
+static uint64_t ascv2_core_reg_read(void *opaque, hwaddr addr, unsigned size)
 {
-    qemu_log_mask(LOG_UNIMP, "SMC: AppleASCWrapV2 core reg READ @ 0x"
-                  HWADDR_FMT_plx "\n", addr);
+    qemu_log_mask(LOG_UNIMP,
+                  "SMC: AppleASCWrapV2 core reg READ @ 0x" HWADDR_FMT_plx "\n",
+                  addr);
     return 0;
 }
 
@@ -457,12 +461,11 @@ static const MemoryRegionOps ascv2_core_reg_ops = {
     .valid.unaligned = false,
 };
 
-static const struct AppleMboxOps smc_mailbox_ops = {
-};
+static const struct AppleMboxOps smc_mailbox_ops = {};
 
 SysBusDevice *apple_smc_create(DTBNode *node, uint32_t protocol_version)
 {
-    DeviceState  *dev;
+    DeviceState *dev;
     AppleSMCState *s;
     SysBusDevice *sbd;
     DTBNode *child;
@@ -487,8 +490,8 @@ SysBusDevice *apple_smc_create(DTBNode *node, uint32_t protocol_version)
      * 0: AppleA7IOP akfRegMap
      * 1: AppleASCWrapV2 coreRegisterMap
      */
-    s->mbox = apple_mbox_create("SMC", s, reg[1], protocol_version,
-                                       &smc_mailbox_ops);
+    s->mbox =
+        apple_mbox_create("SMC", s, reg[1], protocol_version, &smc_mailbox_ops);
     object_property_add_child(OBJECT(s), "mbox", OBJECT(s->mbox));
     apple_mbox_register_endpoint(s->mbox, kSMCKeyEndpoint,
                                  &apple_smc_handle_key_endpoint);
@@ -525,26 +528,25 @@ SysBusDevice *apple_smc_create(DTBNode *node, uint32_t protocol_version)
 static void apple_smc_realize(DeviceState *dev, Error **errp)
 {
     AppleSMCState *s = APPLE_SMC_IOP(dev);
-    uint8_t data[8] = {0x00, 0x00, 0x70, 0x80, 0x00, 0x01, 0x19, 0x40};
+    uint8_t data[8] = { 0x00, 0x00, 0x70, 0x80, 0x00, 0x01, 0x19, 0x40 };
     uint64_t value;
 
     smc_create_key_func(s, SmcKeyNKEY, 4, SmcKeyTypeUint32,
-                        SMC_ATTR_LITTLE_ENDIAN,
-                        &smc_key_count_read, &smc_key_reject_write);
+                        SMC_ATTR_LITTLE_ENDIAN, &smc_key_count_read,
+                        &smc_key_reject_write);
 
-    smc_create_key(s, SmcKeyCLKH, 8, SmcKeyTypeClh,
-                   SMC_ATTR_LITTLE_ENDIAN, data);
+    smc_create_key(s, SmcKeyCLKH, 8, SmcKeyTypeClh, SMC_ATTR_LITTLE_ENDIAN,
+                   data);
 
     data[0] = 3;
-    smc_create_key(s, SmcKeyRGEN, 1, SmcKeyTypeUint8,
-                   SMC_ATTR_LITTLE_ENDIAN, data);
+    smc_create_key(s, SmcKeyRGEN, 1, SmcKeyTypeUint8, SMC_ATTR_LITTLE_ENDIAN,
+                   data);
 
     value = 0;
-    smc_create_key(s, SmcKeyADC_, 4, SmcKeyTypeUint32,
-                   SMC_ATTR_LITTLE_ENDIAN, &value);
+    smc_create_key(s, SmcKeyADC_, 4, SmcKeyTypeUint32, SMC_ATTR_LITTLE_ENDIAN,
+                   &value);
 
-    smc_create_key_func(s, SmcKeyMBSE, 4, SmcKeyTypeHex,
-                        SMC_ATTR_LITTLE_ENDIAN,
+    smc_create_key_func(s, SmcKeyMBSE, 4, SmcKeyTypeHex, SMC_ATTR_LITTLE_ENDIAN,
                         &smc_key_reject_read, &smc_key_mbse_write);
 
 #if 0
@@ -555,8 +557,7 @@ static void apple_smc_realize(DeviceState *dev, Error **errp)
                         SMC_ATTR_LITTLE_ENDIAN,
                         NULL, &smc_key_lgpe_write);
 #endif
-    smc_create_key_func(s, SmcKeyNESN, 4, SmcKeyTypeHex,
-                        SMC_ATTR_LITTLE_ENDIAN,
+    smc_create_key_func(s, SmcKeyNESN, 4, SmcKeyTypeHex, SMC_ATTR_LITTLE_ENDIAN,
                         &smc_key_reject_read, &smc_key_nesn_write);
 
     sysbus_realize(SYS_BUS_DEVICE(s->mbox), errp);

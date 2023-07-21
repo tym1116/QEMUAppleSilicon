@@ -1,23 +1,22 @@
 #include "qemu/osdep.h"
-#include "qapi/error.h"
+#include "crypto/cipher.h"
+#include "hw/arm/xnu.h"
+#include "hw/arm/xnu_dtb.h"
 #include "hw/irq.h"
 #include "hw/misc/apple_aes.h"
 #include "hw/misc/apple_aes_reg.h"
 #include "migration/vmstate.h"
+#include "qapi/error.h"
 #include "qemu/bitops.h"
-#include "qemu/log.h"
-#include "qemu/module.h"
-#include "hw/arm/xnu.h"
-#include "hw/arm/xnu_dtb.h"
-#include "qemu/main-loop.h"
 #include "qemu/lockable.h"
-#include "crypto/cipher.h"
-#include "sysemu/dma.h"
+#include "qemu/log.h"
+#include "qemu/main-loop.h"
+#include "qemu/module.h"
 #include "qemu/rcu.h"
+#include "sysemu/dma.h"
 #include "trace.h"
 
 OBJECT_DECLARE_SIMPLE_TYPE(AppleAESState, APPLE_AES)
-
 
 typedef struct AESCommand {
     uint32_t command;
@@ -62,32 +61,47 @@ struct AppleAESState {
     bool stopped;
 };
 
-static uint32_t key_size(uint8_t len) {
-	switch (len) {
-    case KEY_LEN_128: return 128;
-    case KEY_LEN_192: return 192;
-    case KEY_LEN_256: return 256;
-    default: return 0;
-	}
-	return 0;
+static uint32_t key_size(uint8_t len)
+{
+    switch (len) {
+    case KEY_LEN_128:
+        return 128;
+    case KEY_LEN_192:
+        return 192;
+    case KEY_LEN_256:
+        return 256;
+    default:
+        return 0;
+    }
+    return 0;
 }
 
-static QCryptoCipherAlgorithm key_algo(uint8_t mode) {
-	switch (mode) {
-    case KEY_LEN_128: return QCRYPTO_CIPHER_ALG_AES_128;
-    case KEY_LEN_192: return QCRYPTO_CIPHER_ALG_AES_192;
-    case KEY_LEN_256: return QCRYPTO_CIPHER_ALG_AES_256;
-    default: return QCRYPTO_CIPHER_ALG__MAX;
-	}
-	return QCRYPTO_CIPHER_ALG__MAX;
-}
-
-static QCryptoCipherMode key_mode(block_mode_t mode) {
+static QCryptoCipherAlgorithm key_algo(uint8_t mode)
+{
     switch (mode) {
-    case BLOCK_MODE_ECB: return QCRYPTO_CIPHER_MODE_ECB;
-    case BLOCK_MODE_CBC: return QCRYPTO_CIPHER_MODE_CBC;
-    case BLOCK_MODE_CTR: return QCRYPTO_CIPHER_MODE_CTR;
-    default: return QCRYPTO_CIPHER_MODE__MAX;
+    case KEY_LEN_128:
+        return QCRYPTO_CIPHER_ALG_AES_128;
+    case KEY_LEN_192:
+        return QCRYPTO_CIPHER_ALG_AES_192;
+    case KEY_LEN_256:
+        return QCRYPTO_CIPHER_ALG_AES_256;
+    default:
+        return QCRYPTO_CIPHER_ALG__MAX;
+    }
+    return QCRYPTO_CIPHER_ALG__MAX;
+}
+
+static QCryptoCipherMode key_mode(block_mode_t mode)
+{
+    switch (mode) {
+    case BLOCK_MODE_ECB:
+        return QCRYPTO_CIPHER_MODE_ECB;
+    case BLOCK_MODE_CBC:
+        return QCRYPTO_CIPHER_MODE_CBC;
+    case BLOCK_MODE_CTR:
+        return QCRYPTO_CIPHER_MODE_CTR;
+    default:
+        return QCRYPTO_CIPHER_MODE__MAX;
     }
     return QCRYPTO_CIPHER_MODE__MAX;
 }
@@ -116,9 +130,12 @@ static void aes_update_command_fifo_status(AppleAESState *s)
 {
     /* TODO: implement read/write_pointer */
     s->reg.command_fifo_status.empty = s->reg.command_fifo_status.level == 0;
-    s->reg.command_fifo_status.full = s->reg.command_fifo_status.level >= COMMAND_FIFO_SIZE;
-    s->reg.command_fifo_status.overflow = s->reg.command_fifo_status.level > COMMAND_FIFO_SIZE;
-    s->reg.command_fifo_status.low = s->reg.command_fifo_status.level < s->reg.watermarks.command_fifo_low;
+    s->reg.command_fifo_status.full =
+        s->reg.command_fifo_status.level >= COMMAND_FIFO_SIZE;
+    s->reg.command_fifo_status.overflow =
+        s->reg.command_fifo_status.level > COMMAND_FIFO_SIZE;
+    s->reg.command_fifo_status.low =
+        s->reg.command_fifo_status.level < s->reg.watermarks.command_fifo_low;
 
     if (s->reg.command_fifo_status.low) {
         qatomic_or(&s->reg.int_status.raw, AES_BLK_INT_COMMAND_FIFO_LOW);
@@ -130,7 +147,8 @@ static void aes_update_command_fifo_status(AppleAESState *s)
 
 static void aes_empty_fifo(AppleAESState *s)
 {
-    WITH_QEMU_LOCK_GUARD(&s->queue_mutex) {
+    WITH_QEMU_LOCK_GUARD(&s->queue_mutex)
+    {
         while (!QTAILQ_EMPTY(&s->queue)) {
             AESCommand *cmd = QTAILQ_FIRST(&s->queue);
             QTAILQ_REMOVE(&s->queue, cmd, entry);
@@ -163,62 +181,73 @@ static bool aes_process_command(AppleAESState *s, AESCommand *cmd)
 {
     trace_apple_aes_process_command(COMMAND_OPCODE(cmd->command));
     bool locked = false;
-#define lock_reg() do { qemu_mutex_lock_iothread(); locked = true; } while(0)
+#define lock_reg()                  \
+    do {                            \
+        qemu_mutex_lock_iothread(); \
+        locked = true;              \
+    } while (0)
     switch (COMMAND_OPCODE(cmd->command)) {
-    case OPCODE_KEY:
-        {
-            uint32_t ctx = COMMAND_KEY_COMMAND_KEY_CONTEXT(cmd->command);
-            s->keys[ctx].select = COMMAND_KEY_COMMAND_KEY_SELECT(cmd->command);
-            s->keys[ctx].algo = key_algo(COMMAND_KEY_COMMAND_KEY_LENGTH(cmd->command));
-            s->keys[ctx].len = key_size(COMMAND_KEY_COMMAND_KEY_LENGTH(cmd->command)) / 8;
-            s->keys[ctx].wrapped = (cmd->command & COMMAND_KEY_COMMAND_WRAPPED) != 0;
-            s->keys[ctx].encrypt = (cmd->command & COMMAND_KEY_COMMAND_ENCRYPT) != 0;
-            s->keys[ctx].func = COMMAND_KEY_COMMAND_KEY_FUNC(cmd->command);
-            s->keys[ctx].mode = COMMAND_KEY_COMMAND_BLOCK_MODE(cmd->command);
-            s->keys[ctx].id = COMMAND_KEY_COMMAND_COMMAND_ID(cmd->command);
-            memcpy(s->keys[ctx].key, &cmd->data[1], s->keys[ctx].len);
-            if (ctx) {
-                s->reg.key_id.context_1 = s->keys[ctx].id;
-            } else {
-                s->reg.key_id.context_0 = s->keys[ctx].id;
-            }
-            if (s->keys[ctx].cipher) {
-                qcrypto_cipher_free(s->keys[ctx].cipher);
-                s->keys[ctx].cipher = NULL;
-            }
-            lock_reg();
-            if (s->keys[ctx].select != KEY_SELECT_SOFTWARE) {
-                s->keys[ctx].disabled = true;
-                if (ctx) {
-                    qatomic_or(&s->reg.int_status.raw, AES_BLK_INT_KEY_1_DISABLED);
-                } else {
-                    qatomic_or(&s->reg.int_status.raw, AES_BLK_INT_KEY_0_DISABLED);
-                }
-                qemu_log_mask(LOG_GUEST_ERROR, "%s: Attempting to select unsupported hardware key: 0x%x\n", __func__, s->keys[ctx].select);
-            } else {
-                if (s->keys[ctx].wrapped) {
-                    qemu_log_mask(LOG_GUEST_ERROR, "%s: What is wrapped key?\n", __func__);
-                }
-                s->keys[ctx].disabled = false;
-                if (ctx) {
-                    qatomic_and(&s->reg.int_status.raw, ~AES_BLK_INT_KEY_1_DISABLED);
-                } else {
-                    qatomic_and(&s->reg.int_status.raw, ~AES_BLK_INT_KEY_0_DISABLED);
-                }
-                s->keys[ctx].cipher = qcrypto_cipher_new(s->keys[ctx].algo,
-                        key_mode(s->keys[ctx].mode),
-                        s->keys[ctx].key, s->keys[ctx].len, &error_abort);
-            }
-            break;
+    case OPCODE_KEY: {
+        uint32_t ctx = COMMAND_KEY_COMMAND_KEY_CONTEXT(cmd->command);
+        s->keys[ctx].select = COMMAND_KEY_COMMAND_KEY_SELECT(cmd->command);
+        s->keys[ctx].algo =
+            key_algo(COMMAND_KEY_COMMAND_KEY_LENGTH(cmd->command));
+        s->keys[ctx].len =
+            key_size(COMMAND_KEY_COMMAND_KEY_LENGTH(cmd->command)) / 8;
+        s->keys[ctx].wrapped =
+            (cmd->command & COMMAND_KEY_COMMAND_WRAPPED) != 0;
+        s->keys[ctx].encrypt =
+            (cmd->command & COMMAND_KEY_COMMAND_ENCRYPT) != 0;
+        s->keys[ctx].func = COMMAND_KEY_COMMAND_KEY_FUNC(cmd->command);
+        s->keys[ctx].mode = COMMAND_KEY_COMMAND_BLOCK_MODE(cmd->command);
+        s->keys[ctx].id = COMMAND_KEY_COMMAND_COMMAND_ID(cmd->command);
+        memcpy(s->keys[ctx].key, &cmd->data[1], s->keys[ctx].len);
+        if (ctx) {
+            s->reg.key_id.context_1 = s->keys[ctx].id;
+        } else {
+            s->reg.key_id.context_0 = s->keys[ctx].id;
         }
-    case OPCODE_IV:
-    {
+        if (s->keys[ctx].cipher) {
+            qcrypto_cipher_free(s->keys[ctx].cipher);
+            s->keys[ctx].cipher = NULL;
+        }
+        lock_reg();
+        if (s->keys[ctx].select != KEY_SELECT_SOFTWARE) {
+            s->keys[ctx].disabled = true;
+            if (ctx) {
+                qatomic_or(&s->reg.int_status.raw, AES_BLK_INT_KEY_1_DISABLED);
+            } else {
+                qatomic_or(&s->reg.int_status.raw, AES_BLK_INT_KEY_0_DISABLED);
+            }
+            qemu_log_mask(
+                LOG_GUEST_ERROR,
+                "%s: Attempting to select unsupported hardware key: 0x%x\n",
+                __func__, s->keys[ctx].select);
+        } else {
+            if (s->keys[ctx].wrapped) {
+                qemu_log_mask(LOG_GUEST_ERROR, "%s: What is wrapped key?\n",
+                              __func__);
+            }
+            s->keys[ctx].disabled = false;
+            if (ctx) {
+                qatomic_and(&s->reg.int_status.raw,
+                            ~AES_BLK_INT_KEY_1_DISABLED);
+            } else {
+                qatomic_and(&s->reg.int_status.raw,
+                            ~AES_BLK_INT_KEY_0_DISABLED);
+            }
+            s->keys[ctx].cipher = qcrypto_cipher_new(
+                s->keys[ctx].algo, key_mode(s->keys[ctx].mode),
+                s->keys[ctx].key, s->keys[ctx].len, &error_abort);
+        }
+        break;
+    }
+    case OPCODE_IV: {
         uint32_t ctx = COMMAND_IV_COMMAND_IV_CONTEXT(cmd->command);
         memcpy(s->iv[ctx], &cmd->data[1], 16);
         break;
     }
-    case OPCODE_DATA:
-    {
+    case OPCODE_DATA: {
         command_data_t *c = (command_data_t *)cmd->data;
         uint32_t key_ctx = COMMAND_DATA_COMMAND_KEY_CONTEXT(c->command);
         uint32_t iv_ctx = COMMAND_DATA_COMMAND_IV_CONTEXT(c->command);
@@ -228,8 +257,10 @@ static bool aes_process_command(AppleAESState *s, AESCommand *cmd)
         g_autofree uint8_t *buffer = NULL;
         g_autofree Error *errp = NULL;
 
-        source_addr |= ((dma_addr_t)COMMAND_DATA_UPPER_ADDR_SOURCE(c->upper_addr)) << 32;
-        dest_addr |= ((dma_addr_t)COMMAND_DATA_UPPER_ADDR_DEST(c->upper_addr)) << 32;
+        source_addr |=
+            ((dma_addr_t)COMMAND_DATA_UPPER_ADDR_SOURCE(c->upper_addr)) << 32;
+        dest_addr |= ((dma_addr_t)COMMAND_DATA_UPPER_ADDR_DEST(c->upper_addr))
+                     << 32;
         if (len & 0xf) {
             lock_reg();
             qatomic_or(&s->reg.int_status.raw, AES_BLK_INT_INVALID_DATA_LENGTH);
@@ -247,34 +278,41 @@ static bool aes_process_command(AppleAESState *s, AESCommand *cmd)
 
         buffer = g_malloc0(len);
 
-        WITH_RCU_READ_LOCK_GUARD() {
+        WITH_RCU_READ_LOCK_GUARD()
+        {
             dma_memory_read(&s->dma_as, source_addr, buffer, len,
                             MEMTXATTRS_UNSPECIFIED);
         }
         qcrypto_cipher_setiv(s->keys[key_ctx].cipher, s->iv[iv_ctx], 16, &errp);
 
         if (s->keys[key_ctx].encrypt) {
-            qcrypto_cipher_encrypt(s->keys[key_ctx].cipher, buffer, buffer, len, &errp);
+            qcrypto_cipher_encrypt(s->keys[key_ctx].cipher, buffer, buffer, len,
+                                   &errp);
         } else {
-            qcrypto_cipher_decrypt(s->keys[key_ctx].cipher, buffer, buffer, len, &errp);
+            qcrypto_cipher_decrypt(s->keys[key_ctx].cipher, buffer, buffer, len,
+                                   &errp);
         }
         qcrypto_cipher_getiv(s->keys[key_ctx].cipher, s->iv[iv_ctx], 16, &errp);
-        dma_memory_write(&s->dma_as, dest_addr, buffer, len, MEMTXATTRS_UNSPECIFIED);
+        dma_memory_write(&s->dma_as, dest_addr, buffer, len,
+                         MEMTXATTRS_UNSPECIFIED);
         break;
     }
-    case OPCODE_STORE_IV:
-    {
+    case OPCODE_STORE_IV: {
         command_store_iv_t *c = (command_store_iv_t *)cmd->data;
         dma_addr_t dest_addr = 0;
         uint32_t ctx = COMMAND_STORE_IV_COMMAND_CONTEXT(cmd->command);
         dest_addr = c->dest_addr;
-        dest_addr |= ((dma_addr_t)COMMAND_STORE_IV_COMMAND_UPPER_ADDR_DEST(c->command)) << 32;
-        dma_memory_write(&s->dma_as, dest_addr, s->iv[ctx], 16, MEMTXATTRS_UNSPECIFIED);
+        dest_addr |=
+            ((dma_addr_t)COMMAND_STORE_IV_COMMAND_UPPER_ADDR_DEST(c->command))
+            << 32;
+        dma_memory_write(&s->dma_as, dest_addr, s->iv[ctx], 16,
+                         MEMTXATTRS_UNSPECIFIED);
         break;
     }
     case OPCODE_FLAG:
         lock_reg();
-        qatomic_set(&s->reg.flag_command.code, COMMAND_FLAG_ID_CODE(cmd->command));
+        qatomic_set(&s->reg.flag_command.code,
+                    COMMAND_FLAG_ID_CODE(cmd->command));
         if (cmd->command & COMMAND_FLAG_STOP_COMMANDS) {
             s->stopped = true;
         }
@@ -298,7 +336,8 @@ static void *aes_thread(void *opaque)
     rcu_register_thread();
     while (!s->stopped) {
         AESCommand *cmd = NULL;
-        WITH_QEMU_LOCK_GUARD(&s->queue_mutex) {
+        WITH_QEMU_LOCK_GUARD(&s->queue_mutex)
+        {
             if (!QTAILQ_EMPTY(&s->queue)) {
                 cmd = QTAILQ_FIRST(&s->queue);
                 QTAILQ_REMOVE(&s->queue, cmd, entry);
@@ -316,11 +355,11 @@ static void *aes_thread(void *opaque)
                 g_free(cmd->data);
             }
             g_free(cmd);
-
         }
-        WITH_QEMU_LOCK_GUARD(&s->queue_mutex) {
+        WITH_QEMU_LOCK_GUARD(&s->queue_mutex)
+        {
             while (QTAILQ_EMPTY(&s->queue) && !s->stopped) {
-                    qemu_cond_wait(&s->thread_cond, &s->queue_mutex);
+                qemu_cond_wait(&s->thread_cond, &s->queue_mutex);
             }
         }
     }
@@ -328,22 +367,18 @@ static void *aes_thread(void *opaque)
     return NULL;
 }
 
-static void aes_security_reg_write(void *opaque, hwaddr addr,
-                                   uint64_t data,
+static void aes_security_reg_write(void *opaque, hwaddr addr, uint64_t data,
                                    unsigned size)
 {
 }
 
-static uint64_t aes_security_reg_read(void *opaque,
-                                      hwaddr addr,
-                                      unsigned size)
+static uint64_t aes_security_reg_read(void *opaque, hwaddr addr, unsigned size)
 {
     /* Disable platform keys since we don't know them */
     return 0xff;
 }
 
-static void aes_reg_write(void *opaque, hwaddr addr,
-                          uint64_t data,
+static void aes_reg_write(void *opaque, hwaddr addr, uint64_t data,
                           unsigned size)
 {
     AppleAESState *s = APPLE_AES(opaque);
@@ -356,7 +391,7 @@ static void aes_reg_write(void *opaque, hwaddr addr,
     bool nowrite = false;
 
     if (addr >= AES_BLK_REG_SIZE) {
-        qemu_log_mask(LOG_GUEST_ERROR, "%s: Bad offset 0x%"HWADDR_PRIx"\n",
+        qemu_log_mask(LOG_GUEST_ERROR, "%s: Bad offset 0x%" HWADDR_PRIx "\n",
                       __func__, addr);
         return;
     }
@@ -404,7 +439,8 @@ static void aes_reg_write(void *opaque, hwaddr addr,
             apple_aes_reset(DEVICE(s));
             break;
         default:
-            qemu_log_mask(LOG_GUEST_ERROR, "rAES_CONTROL: Invalid write: 0x%x\n", val);
+            qemu_log_mask(LOG_GUEST_ERROR,
+                          "rAES_CONTROL: Invalid write: 0x%x\n", val);
             break;
         }
         nowrite = true;
@@ -418,7 +454,8 @@ static void aes_reg_write(void *opaque, hwaddr addr,
             s->command = val;
             switch (COMMAND_OPCODE(val)) {
             case OPCODE_KEY:
-                if (COMMAND_KEY_COMMAND_KEY_SELECT(val) == KEY_SELECT_SOFTWARE) {
+                if (COMMAND_KEY_COMMAND_KEY_SELECT(val) ==
+                    KEY_SELECT_SOFTWARE) {
                     uint32_t key_len =
                         key_size(COMMAND_KEY_COMMAND_KEY_LENGTH(val)) / 8;
 
@@ -460,7 +497,8 @@ static void aes_reg_write(void *opaque, hwaddr addr,
             default:
                 qatomic_or(&s->reg.int_status.raw, AES_BLK_INT_INVALID_COMMAND);
                 iflg = 1;
-                qemu_log_mask(LOG_GUEST_ERROR, "rAES_COMMAND_FIFO: Unknown opcode: 0x%x\n",
+                qemu_log_mask(LOG_GUEST_ERROR,
+                              "rAES_COMMAND_FIFO: Unknown opcode: 0x%x\n",
                               COMMAND_OPCODE(val));
                 break;
             }
@@ -476,8 +514,9 @@ static void aes_reg_write(void *opaque, hwaddr addr,
             s->data = NULL;
             s->data_len = s->data_read = 0;
 
-            WITH_QEMU_LOCK_GUARD(&s->queue_mutex) {
-               QTAILQ_INSERT_TAIL(&s->queue, cmd, entry);
+            WITH_QEMU_LOCK_GUARD(&s->queue_mutex)
+            {
+                QTAILQ_INSERT_TAIL(&s->queue, cmd, entry);
             }
             qemu_cond_signal(&s->thread_cond);
         }
@@ -490,7 +529,9 @@ static void aes_reg_write(void *opaque, hwaddr addr,
     case rAES_CONFIG:
         break;
     default:
-        qemu_log_mask(LOG_GUEST_ERROR, "%s: write to unknown reg: 0x%"HWADDR_PRIx"\n", __func__, addr);
+        qemu_log_mask(LOG_GUEST_ERROR,
+                      "%s: write to unknown reg: 0x%" HWADDR_PRIx "\n",
+                      __func__, addr);
         break;
     }
 
@@ -504,16 +545,14 @@ static void aes_reg_write(void *opaque, hwaddr addr,
     trace_apple_aes_reg_write(addr, orig, old, val);
 }
 
-static uint64_t aes_reg_read(void *opaque,
-                             hwaddr addr,
-                             unsigned size)
+static uint64_t aes_reg_read(void *opaque, hwaddr addr, unsigned size)
 {
     AppleAESState *s = APPLE_AES(opaque);
     uint32_t val = 0;
     uint32_t *mmio = NULL;
 
     if (addr >= AES_BLK_REG_SIZE) {
-        qemu_log_mask(LOG_GUEST_ERROR, "%s: Bad offset 0x%"HWADDR_PRIx"\n",
+        qemu_log_mask(LOG_GUEST_ERROR, "%s: Bad offset 0x%" HWADDR_PRIx "\n",
                       __func__, addr);
         return 0;
     }
@@ -604,7 +643,7 @@ static void apple_aes_unrealize(DeviceState *dev)
 
 SysBusDevice *apple_aes_create(DTBNode *node)
 {
-    DeviceState  *dev;
+    DeviceState *dev;
     AppleAESState *s;
     SysBusDevice *sbd;
     DTBProp *prop;
@@ -684,52 +723,55 @@ static int apple_aes_post_load(void *opaque, int version_id)
 
 static const VMStateDescription vmstate_apple_aes_command = {
     .name = "apple_aes_command",
-    .fields = (VMStateField[]) {
-        VMSTATE_UINT32(command, AESCommand),
-        VMSTATE_UINT32(data_len, AESCommand),
-        VMSTATE_VARRAY_UINT32(data, AESCommand, data_len, 1,
-                              vmstate_info_uint32, uint32_t),
-        VMSTATE_END_OF_LIST()
-    }
+    .fields =
+        (VMStateField[]){
+            VMSTATE_UINT32(command, AESCommand),
+            VMSTATE_UINT32(data_len, AESCommand),
+            VMSTATE_VARRAY_UINT32(data, AESCommand, data_len, 1,
+                                  vmstate_info_uint32, uint32_t),
+            VMSTATE_END_OF_LIST(),
+        }
 };
 
 static const VMStateDescription vmstate_apple_aes_key = {
     .name = "apple_aes_key",
     .post_load = apple_aes_key_post_load,
-    .fields = (VMStateField[]) {
-        VMSTATE_UINT32(select, AESKey),
-        VMSTATE_UINT32(algo, AESKey),
-        VMSTATE_UINT32(len, AESKey),
-        VMSTATE_BOOL(wrapped, AESKey),
-        VMSTATE_BOOL(encrypt, AESKey),
-        VMSTATE_UINT32(func, AESKey),
-        VMSTATE_UINT32(mode, AESKey),
-        VMSTATE_UINT8(id, AESKey),
-        VMSTATE_UINT8_ARRAY(key, AESKey, 32),
-        VMSTATE_BOOL(disabled, AESKey),
-        VMSTATE_END_OF_LIST()
-    }
+    .fields =
+        (VMStateField[]){
+            VMSTATE_UINT32(select, AESKey),
+            VMSTATE_UINT32(algo, AESKey),
+            VMSTATE_UINT32(len, AESKey),
+            VMSTATE_BOOL(wrapped, AESKey),
+            VMSTATE_BOOL(encrypt, AESKey),
+            VMSTATE_UINT32(func, AESKey),
+            VMSTATE_UINT32(mode, AESKey),
+            VMSTATE_UINT8(id, AESKey),
+            VMSTATE_UINT8_ARRAY(key, AESKey, 32),
+            VMSTATE_BOOL(disabled, AESKey),
+            VMSTATE_END_OF_LIST(),
+        }
 };
 
 static const VMStateDescription vmstate_apple_aes = {
     .name = "apple_aes",
     .pre_save = apple_aes_pre_save,
     .post_load = apple_aes_post_load,
-    .fields = (VMStateField[]) {
-        VMSTATE_INT32(last_level, AppleAESState),
-        VMSTATE_UINT32_ARRAY(reg.raw, AppleAESState,
-                             AES_BLK_REG_SIZE / sizeof(uint32_t)),
-        VMSTATE_QTAILQ_V(queue, AppleAESState, 0, vmstate_apple_aes_command,
-                         AESCommand, entry),
-        VMSTATE_UINT32(command, AppleAESState),
-        VMSTATE_UINT32(data_len, AppleAESState),
-        VMSTATE_UINT32(data_read, AppleAESState),
-        VMSTATE_STRUCT_ARRAY(keys, AppleAESState, 2, 1, vmstate_apple_aes_key,
-                             AESKey),
-        VMSTATE_UINT8_2DARRAY(iv, AppleAESState, 4, 16),
-        VMSTATE_BOOL(stopped, AppleAESState),
-        VMSTATE_END_OF_LIST()
-    }
+    .fields =
+        (VMStateField[]){
+            VMSTATE_INT32(last_level, AppleAESState),
+            VMSTATE_UINT32_ARRAY(reg.raw, AppleAESState,
+                                 AES_BLK_REG_SIZE / sizeof(uint32_t)),
+            VMSTATE_QTAILQ_V(queue, AppleAESState, 0, vmstate_apple_aes_command,
+                             AESCommand, entry),
+            VMSTATE_UINT32(command, AppleAESState),
+            VMSTATE_UINT32(data_len, AppleAESState),
+            VMSTATE_UINT32(data_read, AppleAESState),
+            VMSTATE_STRUCT_ARRAY(keys, AppleAESState, 2, 1,
+                                 vmstate_apple_aes_key, AESKey),
+            VMSTATE_UINT8_2DARRAY(iv, AppleAESState, 4, 16),
+            VMSTATE_BOOL(stopped, AppleAESState),
+            VMSTATE_END_OF_LIST(),
+        }
 };
 
 static void apple_aes_class_init(ObjectClass *klass, void *data)
@@ -757,4 +799,3 @@ static void apple_aes_register_types(void)
 }
 
 type_init(apple_aes_register_types);
-

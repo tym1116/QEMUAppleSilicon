@@ -1,9 +1,14 @@
 #include "qemu/osdep.h"
-#include "qapi/error.h"
+#include "crypto/cipher.h"
+#include "crypto/random.h"
 #include "hw/arm/apple_sep.h"
-#include "hw/misc/apple_mbox.h"
+#include "hw/arm/apple_sep_protocol.h"
+#include "hw/arm/xnu.h"
+#include "hw/arm/xnu_dtb.h"
 #include "hw/irq.h"
+#include "hw/misc/apple_mbox.h"
 #include "migration/vmstate.h"
+#include "qapi/error.h"
 #include "qemu/bitops.h"
 #include "qemu/lockable.h"
 #include "qemu/log.h"
@@ -11,26 +16,24 @@
 #include "qemu/queue.h"
 #include "qemu/timer.h"
 #include "sysemu/runstate.h"
-#include "hw/arm/xnu.h"
-#include "hw/arm/xnu_dtb.h"
-#include "hw/arm/apple_sep_protocol.h"
-#include "crypto/random.h"
-#include "crypto/cipher.h"
 
 #define TYPE_APPLE_SEP "apple.sep"
 OBJECT_DECLARE_SIMPLE_TYPE(AppleSEPState, APPLE_SEP)
 
-#define SEP_LOG_MSG(ep, msg) \
-do { qemu_log_mask(LOG_GUEST_ERROR, "SEP: message:" \
-                   " ep=%u msg=0x" HWADDR_FMT_plx "\n", \
-                   ep, msg); } while (0)
+#define SEP_LOG_MSG(ep, msg)                               \
+    do {                                                   \
+        qemu_log_mask(LOG_GUEST_ERROR,                     \
+                      "SEP: message:"                      \
+                      " ep=%u msg=0x" HWADDR_FMT_plx "\n", \
+                      ep, msg);                            \
+    } while (0)
 
 enum {
     kStatusSEPROM = 1,
     kStatusTz0Booted = 2,
 };
 
-typedef void AppleSEPEPHandler (AppleSEPState *s, struct sep_message *msg);
+typedef void AppleSEPEPHandler(AppleSEPState *s, struct sep_message *msg);
 
 typedef struct sep_endpoint {
     uint8_t id;
@@ -52,7 +55,7 @@ static void apple_sep_control_endpoint(AppleSEPState *s,
 {
     struct sep_message reply = { 0 };
 
-    reply.endpoint = kEndpoint_CONTROL; //msg->endpoint;
+    reply.endpoint = kEndpoint_CONTROL; // msg->endpoint;
     reply.tag = msg->tag;
     switch (msg->opcode) {
     case kOpCode_Sleep:
@@ -89,7 +92,7 @@ static void apple_sep_control_endpoint(AppleSEPState *s,
 static void apple_sep_ep_discover(AppleSEPState *s)
 {
     sep_endpoint *ep = NULL;
-    QTAILQ_FOREACH(ep, &s->endpoints, entry) {
+    QTAILQ_FOREACH (ep, &s->endpoints, entry) {
         struct sep_message msg = { 0 };
         msg.endpoint = kEndpoint_DISCOVERY;
         msg.tag = 0;
@@ -99,7 +102,7 @@ static void apple_sep_ep_discover(AppleSEPState *s)
         apple_mbox_send_control_message(s->mbox, 0, msg.raw);
     }
 
-    QTAILQ_FOREACH(ep, &s->endpoints, entry) {
+    QTAILQ_FOREACH (ep, &s->endpoints, entry) {
         struct sep_message msg = { 0 };
         msg.endpoint = kEndpoint_DISCOVERY;
         msg.tag = 0;
@@ -116,7 +119,7 @@ static void apple_sep_ep_discover(AppleSEPState *s)
 static void apple_seprom_endpoint(AppleSEPState *s, struct sep_message *msg)
 {
     struct sep_message reply = { 0 };
-    reply.endpoint = kEndpoint_SEPROM; //msg->endpoint;
+    reply.endpoint = kEndpoint_SEPROM; // msg->endpoint;
     reply.tag = msg->tag;
     switch (msg->opcode) {
     case kOpCode_Ping:
@@ -157,7 +160,7 @@ static void apple_seprom_endpoint(AppleSEPState *s, struct sep_message *msg)
 static sep_endpoint *apple_sep_get_endpoint(AppleSEPState *s, uint8_t id)
 {
     sep_endpoint *d;
-    QTAILQ_FOREACH(d, &s->endpoints, entry) {
+    QTAILQ_FOREACH (d, &s->endpoints, entry) {
         if (d->id == id) {
             return d;
         }
@@ -176,8 +179,7 @@ static void apple_sep_register_endpoint(AppleSEPState *s, uint8_t id,
     QTAILQ_INSERT_TAIL(&s->endpoints, ep, entry);
 }
 
-static void apple_sep_endpoint_handler(void *opaque, uint32_t ep,
-                                                     uint64_t msg)
+static void apple_sep_endpoint_handler(void *opaque, uint32_t ep, uint64_t msg)
 {
     AppleSEPState *s = APPLE_SEP(opaque);
     struct sep_message *m = (struct sep_message *)&msg;
@@ -198,12 +200,11 @@ static void apple_sep_endpoint_handler(void *opaque, uint32_t ep,
     }
 }
 
-static const struct AppleMboxOps sep_mailbox_ops = {
-};
+static const struct AppleMboxOps sep_mailbox_ops = {};
 
 SysBusDevice *apple_sep_create(DTBNode *node, uint32_t build_version)
 {
-    DeviceState  *dev;
+    DeviceState *dev;
     AppleSEPState *s;
     SysBusDevice *sbd;
     DTBNode *child;
@@ -218,14 +219,14 @@ SysBusDevice *apple_sep_create(DTBNode *node, uint32_t build_version)
     sbd = SYS_BUS_DEVICE(dev);
 
     switch (BUILD_VERSION_MAJOR(build_version)) {
-        case 14:
-            protocol_version = 11;
-            break;
-        case 15:
-            protocol_version = 12;
-            break;
-        default:
-            break;
+    case 14:
+        protocol_version = 11;
+        break;
+    case 15:
+        protocol_version = 12;
+        break;
+    default:
+        break;
     }
 
     prop = find_dtb_prop(node, "reg");
@@ -237,8 +238,8 @@ SysBusDevice *apple_sep_create(DTBNode *node, uint32_t build_version)
      * 0: AppleA7IOP akfRegMap
      * 1: AppleASCWrapV2 coreRegisterMap
      */
-    s->mbox = apple_mbox_create("SEP", s, reg[1], protocol_version,
-                                       &sep_mailbox_ops);
+    s->mbox =
+        apple_mbox_create("SEP", s, reg[1], protocol_version, &sep_mailbox_ops);
     object_property_add_child(OBJECT(s), "mbox", OBJECT(s->mbox));
     apple_mbox_register_control_endpoint(s->mbox, 0,
                                          &apple_sep_endpoint_handler);
@@ -260,7 +261,7 @@ SysBusDevice *apple_sep_create(DTBNode *node, uint32_t build_version)
     QTAILQ_INIT(&s->endpoints);
 
     apple_sep_register_endpoint(s, kEndpoint_CONTROL, 'cntl',
-                                           apple_sep_control_endpoint);
+                                apple_sep_control_endpoint);
     return sbd;
 }
 

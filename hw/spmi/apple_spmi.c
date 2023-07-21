@@ -1,81 +1,81 @@
 #include "qemu/osdep.h"
-#include "qapi/error.h"
+#include "hw/arm/xnu.h"
+#include "hw/arm/xnu_dtb.h"
 #include "hw/irq.h"
+#include "hw/spmi/apple_spmi.h"
 #include "migration/vmstate.h"
+#include "qapi/error.h"
 #include "qemu/bitops.h"
 #include "qemu/log.h"
 #include "qemu/module.h"
 #include "sysemu/dma.h"
-#include "hw/arm/xnu.h"
-#include "hw/arm/xnu_dtb.h"
-#include "hw/spmi/apple_spmi.h"
 
-//#define DEBUG_SPMI
+// #define DEBUG_SPMI
 
-#define APPLE_SPMI_RESP_IRQ                 "apple-spmi-resp"
+#define APPLE_SPMI_RESP_IRQ "apple-spmi-resp"
 
-#define SPMI_QUEUE_DEPTH                    (0x100)
+#define SPMI_QUEUE_DEPTH (0x100)
 
-#define SPMI_CONTROL_QUEUE_RESET            (0x14)
-#define  SPMI_CONTROL_QUEUE_RESET_REQ       (1 << 0)
-#define  SPMI_CONTROL_QUEUE_RESET_RSP       (1 << 1)
+#define SPMI_CONTROL_QUEUE_RESET (0x14)
+#define SPMI_CONTROL_QUEUE_RESET_REQ (1 << 0)
+#define SPMI_CONTROL_QUEUE_RESET_RSP (1 << 1)
 
-#define SPMI_QUEUE_STATUS                   (0x0)
-#define  SPMI_QUEUE_STATUS_REQ_EMPTY        (1 << 8)
-#define  SPMI_QUEUE_STATUS_RSP_EMPTY        (1 << 24)
+#define SPMI_QUEUE_STATUS (0x0)
+#define SPMI_QUEUE_STATUS_REQ_EMPTY (1 << 8)
+#define SPMI_QUEUE_STATUS_RSP_EMPTY (1 << 24)
 
-#define SPMI_REQ_QUEUE_PUSH                 (0x4)
-#define  SPMI_REQ_ADDR_SHIFT                 (16)
-#define  SPMI_REQ_SID_SHIFT                  (8)
-#define  SPMI_REQ_SID(_x)                    (((_x) >> 8) & 0xf)
-#define  SPMI_OPCODE_SHIFT                   (0)
-#define  SPMI_REQ_FINAL                      (1 << 15)
+#define SPMI_REQ_QUEUE_PUSH (0x4)
+#define SPMI_REQ_ADDR_SHIFT (16)
+#define SPMI_REQ_SID_SHIFT (8)
+#define SPMI_REQ_SID(_x) (((_x) >> 8) & 0xf)
+#define SPMI_OPCODE_SHIFT (0)
+#define SPMI_REQ_FINAL (1 << 15)
 
-#define SPMI_RSP_QUEUE_POP                  (0x8)
-#define  SPMI_RSP_ACK_MASK                  (0xff)
-#define  SPMI_RSP_ACK_SHIFT                 (16)
+#define SPMI_RSP_QUEUE_POP (0x8)
+#define SPMI_RSP_ACK_MASK (0xff)
+#define SPMI_RSP_ACK_SHIFT (16)
 
-#define SPMI_NUM_IRQ_BANK                   (9)
-#define SPMI_NUM_IRQ                        (9 * 32)
-#define SPMI_INT_STATUS_V0(_b)              (0x40 + (_b) * 4)
-#define SPMI_INT_STATUS_V1(_b)              (0x60 + (_b) * 4)
-#define SPMI_INT_ENAB(_b)                   (0x20 + (_b) * 4)
+#define SPMI_NUM_IRQ_BANK (9)
+#define SPMI_NUM_IRQ (9 * 32)
+#define SPMI_INT_STATUS_V0(_b) (0x40 + (_b)*4)
+#define SPMI_INT_STATUS_V1(_b) (0x60 + (_b)*4)
+#define SPMI_INT_ENAB(_b) (0x20 + (_b)*4)
 
-#define SPMI_FAULT_UNMAPPED_WRITE           (0x00)
-#define SPMI_FAULT_UNSUPPORTED_READ         (0x04)
-#define SPMI_FAULT_NO_RESPONSE              (0x08)
-#define SPMI_FAULT_CMD_PARITY_BOM           (0x10)
-#define SPMI_FAULT_CMD_PARITY_NOT_BOM       (0x14)
-#define SPMI_FAULT_ADDR_PARITY              (0x18)
-#define SPMI_FAULT_DATA_PARITY              (0x1C)
-#define SPMI_FAULT_UNRECOGNIZED_CMD         (0x20)
-#define SPMI_FAULT_MPL_COLLISION            (0x24)
-#define SPMI_FAULT_HW_0_REQ_OVFL            (0x28)
-#define SPMI_FAULT_HW_1_REQ_OVFL            (0x2C)
-#define SPMI_FAULT_BACKLIGHT_REQ_OVFL       (0x30)
-#define SPMI_FAULT_SW_0_REQ_OVFL            (0x34)
-#define SPMI_FAULT_SW_1_REQ_OVFL            (0x38)
-#define SPMI_FAULT_SW_2_REQ_OVFL            (0x3C)
-#define SPMI_FAULT_SW_3_REQ_OVFL            (0x40)
-#define SPMI_FAULT_HW_0_RSP_UDFL            (0x44)
-#define SPMI_FAULT_HW_1_RSP_UDFL            (0x48)
-#define SPMI_FAULT_BACKLIGHT_RSP_UDFL       (0x4C)
-#define SPMI_FAULT_SW_0_RSP_UDFL            (0x50)
-#define SPMI_FAULT_SW_1_RSP_UDFL            (0x54)
-#define SPMI_FAULT_SW_2_RSP_UDFL            (0x58)
-#define SPMI_FAULT_SW_3_RSP_UDFL            (0x5C)
-#define SPMI_FAULT_FAULT_RSP_UDFL           (0x60)
+#define SPMI_FAULT_UNMAPPED_WRITE (0x00)
+#define SPMI_FAULT_UNSUPPORTED_READ (0x04)
+#define SPMI_FAULT_NO_RESPONSE (0x08)
+#define SPMI_FAULT_CMD_PARITY_BOM (0x10)
+#define SPMI_FAULT_CMD_PARITY_NOT_BOM (0x14)
+#define SPMI_FAULT_ADDR_PARITY (0x18)
+#define SPMI_FAULT_DATA_PARITY (0x1C)
+#define SPMI_FAULT_UNRECOGNIZED_CMD (0x20)
+#define SPMI_FAULT_MPL_COLLISION (0x24)
+#define SPMI_FAULT_HW_0_REQ_OVFL (0x28)
+#define SPMI_FAULT_HW_1_REQ_OVFL (0x2C)
+#define SPMI_FAULT_BACKLIGHT_REQ_OVFL (0x30)
+#define SPMI_FAULT_SW_0_REQ_OVFL (0x34)
+#define SPMI_FAULT_SW_1_REQ_OVFL (0x38)
+#define SPMI_FAULT_SW_2_REQ_OVFL (0x3C)
+#define SPMI_FAULT_SW_3_REQ_OVFL (0x40)
+#define SPMI_FAULT_HW_0_RSP_UDFL (0x44)
+#define SPMI_FAULT_HW_1_RSP_UDFL (0x48)
+#define SPMI_FAULT_BACKLIGHT_RSP_UDFL (0x4C)
+#define SPMI_FAULT_SW_0_RSP_UDFL (0x50)
+#define SPMI_FAULT_SW_1_RSP_UDFL (0x54)
+#define SPMI_FAULT_SW_2_RSP_UDFL (0x58)
+#define SPMI_FAULT_SW_3_RSP_UDFL (0x5C)
+#define SPMI_FAULT_FAULT_RSP_UDFL (0x60)
 
-#define SPMI_CONTROL_REGS_START             (0x000)
-#define SPMI_CONTROL_REGS_END               (0x100)
-#define SPMI_QUEUE_REGS_START               (0x700)
-#define SPMI_QUEUE_REGS_END                 (0x800)
-#define SPMI_FAULT_REGS_START               (0xd00)
-#define SPMI_FAULT_REGS_END                 (0xe00)
-#define SPMI_FAULT_COUNTER_REGS_START       (0xe00)
-#define SPMI_FAULT_COUNTER_REGS_END         (0xe64)
+#define SPMI_CONTROL_REGS_START (0x000)
+#define SPMI_CONTROL_REGS_END (0x100)
+#define SPMI_QUEUE_REGS_START (0x700)
+#define SPMI_QUEUE_REGS_END (0x800)
+#define SPMI_FAULT_REGS_START (0xd00)
+#define SPMI_FAULT_REGS_END (0xe00)
+#define SPMI_FAULT_COUNTER_REGS_START (0xe00)
+#define SPMI_FAULT_COUNTER_REGS_END (0xe64)
 
-#define SPMI_RESP_IRQ                       (0xc0)
+#define SPMI_RESP_IRQ (0xc0)
 
 static inline int spmi_opcode(uint32_t spmi_request)
 {
@@ -166,8 +166,7 @@ static void apple_spmi_update_queues_status(AppleSPMIState *s)
     }
 }
 
-static void apple_spmi_queue_reg_write(void *opaque, hwaddr addr,
-                                       uint64_t data,
+static void apple_spmi_queue_reg_write(void *opaque, hwaddr addr, uint64_t data,
                                        unsigned size)
 {
     AppleSPMIState *s = APPLE_SPMI(opaque);
@@ -176,9 +175,9 @@ static void apple_spmi_queue_reg_write(void *opaque, hwaddr addr,
     bool iflg = false;
     bool qflg = false;
 #ifdef DEBUG_SPMI
-    qemu_log_mask(LOG_UNIMP, "%s: %s @ 0x"
-    HWADDR_FMT_plx " value: 0x" HWADDR_FMT_plx "\n", DEVICE(s)->id,
-    __func__, addr, data);
+    qemu_log_mask(LOG_UNIMP,
+                  "%s: %s @ 0x" HWADDR_FMT_plx " value: 0x" HWADDR_FMT_plx "\n",
+                  DEVICE(s)->id, __func__, addr, data);
 #endif
 
     switch (addr) {
@@ -191,10 +190,11 @@ static void apple_spmi_queue_reg_write(void *opaque, hwaddr addr,
             uint32_t len = spmi_data_length(value);
 
             s->command = value;
-            #ifdef DEBUG_SPMI
-            qemu_log_mask(LOG_UNIMP, "%s: sid: 0x%x opc: 0x%x addr: 0x%x len: 0x%x\n",
-                                     DEVICE(s)->id, sid, opc, addr, len);
-            #endif
+#ifdef DEBUG_SPMI
+            qemu_log_mask(LOG_UNIMP,
+                          "%s: sid: 0x%x opc: 0x%x addr: 0x%x len: 0x%x\n",
+                          DEVICE(s)->id, sid, opc, addr, len);
+#endif
 
             if (opc == SPMI_CMD_EXT_WRITE || opc == SPMI_CMD_EXT_WRITEL) {
                 s->data_length = (len + 3) / 4;
@@ -228,10 +228,11 @@ static void apple_spmi_queue_reg_write(void *opaque, hwaddr addr,
             s->data[s->data_filled++] = value;
             if (s->data_filled >= s->data_length) {
                 uint32_t requested_len = spmi_data_length(s->command);
-                uint32_t count = spmi_send(s->bus, (uint8_t *)s->data,
-                                           requested_len);
-                fifo32_push(&s->resp_fifo, (s->command & 0xFFF)
-                                           | ((count == requested_len) << 15));
+                uint32_t count =
+                    spmi_send(s->bus, (uint8_t *)s->data, requested_len);
+                fifo32_push(&s->resp_fifo,
+                            (s->command & 0xFFF) |
+                                ((count == requested_len) << 15));
                 g_free(s->data);
                 s->data = NULL;
                 s->data_length = 0;
@@ -244,10 +245,10 @@ static void apple_spmi_queue_reg_write(void *opaque, hwaddr addr,
         }
         break;
     }
-    case SPMI_INT_ENAB(0) ... SPMI_INT_ENAB(SPMI_NUM_IRQ_BANK - 1):
+    case SPMI_INT_ENAB(0)... SPMI_INT_ENAB(SPMI_NUM_IRQ_BANK - 1):
         iflg = true;
         break;
-    case SPMI_INT_STATUS_V1(0) ... SPMI_INT_STATUS_V1(SPMI_NUM_IRQ_BANK - 1):
+    case SPMI_INT_STATUS_V1(0)... SPMI_INT_STATUS_V1(SPMI_NUM_IRQ_BANK - 1):
         value = (*mmio) & (~value);
         iflg = true;
         break;
@@ -263,8 +264,7 @@ static void apple_spmi_queue_reg_write(void *opaque, hwaddr addr,
     }
 }
 
-static uint64_t apple_spmi_queue_reg_read(void *opaque,
-                                          hwaddr addr,
+static uint64_t apple_spmi_queue_reg_read(void *opaque, hwaddr addr,
                                           unsigned size)
 {
     AppleSPMIState *s = APPLE_SPMI(opaque);
@@ -311,17 +311,18 @@ static uint64_t apple_spmi_queue_reg_read(void *opaque,
 }
 
 static const MemoryRegionOps apple_spmi_queue_reg_ops = {
-        .write = apple_spmi_queue_reg_write,
-        .read = apple_spmi_queue_reg_read,
-        .endianness = DEVICE_NATIVE_ENDIAN,
-        .impl.min_access_size = 4,
-        .impl.max_access_size = 4,
-        .valid.min_access_size = 4,
-        .valid.max_access_size = 4,
-        .valid.unaligned = false,
+    .write = apple_spmi_queue_reg_write,
+    .read = apple_spmi_queue_reg_read,
+    .endianness = DEVICE_NATIVE_ENDIAN,
+    .impl.min_access_size = 4,
+    .impl.max_access_size = 4,
+    .valid.min_access_size = 4,
+    .valid.max_access_size = 4,
+    .valid.unaligned = false,
 };
 
-static uint64_t apple_spmi_control_read(void *opaque, hwaddr addr, unsigned size)
+static uint64_t apple_spmi_control_read(void *opaque, hwaddr addr,
+                                        unsigned size)
 {
     AppleSPMIState *s = APPLE_SPMI(opaque);
     bool qflg = false;
@@ -347,8 +348,8 @@ static uint64_t apple_spmi_control_read(void *opaque, hwaddr addr, unsigned size
     return value;
 }
 
-static void apple_spmi_control_write(void *opaque, hwaddr addr,
-                                     uint64_t data, unsigned size)
+static void apple_spmi_control_write(void *opaque, hwaddr addr, uint64_t data,
+                                     unsigned size)
 {
     AppleSPMIState *s = APPLE_SPMI(opaque);
     uint32_t value = data;
@@ -356,9 +357,9 @@ static void apple_spmi_control_write(void *opaque, hwaddr addr,
     bool iflg = false;
     bool qflg = false;
 #ifdef DEBUG_SPMI
-    qemu_log_mask(LOG_UNIMP, "%s: %s @ 0x"
-    HWADDR_FMT_plx " value: 0x" HWADDR_FMT_plx "\n",
-    DEVICE(s)->id, __func__, addr, data);
+    qemu_log_mask(LOG_UNIMP,
+                  "%s: %s @ 0x" HWADDR_FMT_plx " value: 0x" HWADDR_FMT_plx "\n",
+                  DEVICE(s)->id, __func__, addr, data);
 #endif
 
     switch (addr) {
@@ -424,8 +425,8 @@ static uint64_t apple_spmi_fault_read(void *opaque, hwaddr addr, unsigned size)
     return value;
 }
 
-static void apple_spmi_fault_write(void *opaque, hwaddr addr,
-                                   uint64_t data, unsigned size)
+static void apple_spmi_fault_write(void *opaque, hwaddr addr, uint64_t data,
+                                   unsigned size)
 {
     AppleSPMIState *s = APPLE_SPMI(opaque);
     uint32_t value = data;
@@ -433,9 +434,9 @@ static void apple_spmi_fault_write(void *opaque, hwaddr addr,
     bool iflg = false;
     bool qflg = false;
 #ifdef DEBUG_SPMI
-    qemu_log_mask(LOG_UNIMP, "%s: %s @ 0x"
-    HWADDR_FMT_plx " value: 0x" HWADDR_FMT_plx "\n",
-    DEVICE(s)->id, __func__, addr, data);
+    qemu_log_mask(LOG_UNIMP,
+                  "%s: %s @ 0x" HWADDR_FMT_plx " value: 0x" HWADDR_FMT_plx "\n",
+                  DEVICE(s)->id, __func__, addr, data);
 #endif
 
     switch (addr) {
@@ -517,19 +518,18 @@ static void apple_spmi_init(Object *obj)
 
     fifo32_create(&s->resp_fifo, SPMI_QUEUE_DEPTH);
 
-    memory_region_init_io(&s->iomems[0], obj, &apple_spmi_queue_reg_ops,
-                          s, TYPE_APPLE_SPMI ".queue_reg", sizeof(s->queue_reg));
+    memory_region_init_io(&s->iomems[0], obj, &apple_spmi_queue_reg_ops, s,
+                          TYPE_APPLE_SPMI ".queue_reg", sizeof(s->queue_reg));
 
-    memory_region_init_io(&s->iomems[1], obj, &apple_spmi_fault_ops,
-                          s, TYPE_APPLE_SPMI ".fault_reg", sizeof(s->fault_reg));
+    memory_region_init_io(&s->iomems[1], obj, &apple_spmi_fault_ops, s,
+                          TYPE_APPLE_SPMI ".fault_reg", sizeof(s->fault_reg));
 
-    memory_region_init_ram_device_ptr(&s->iomems[2], obj,
-                                      TYPE_APPLE_SPMI ".fault_counter_reg",
-                                      sizeof(s->fault_counter_reg),
-                                      &s->fault_counter_reg);
+    memory_region_init_ram_device_ptr(
+        &s->iomems[2], obj, TYPE_APPLE_SPMI ".fault_counter_reg",
+        sizeof(s->fault_counter_reg), &s->fault_counter_reg);
 
-    memory_region_init_io(&s->iomems[3], obj, &apple_spmi_control_ops,
-                          s, TYPE_APPLE_SPMI ".control_reg",
+    memory_region_init_io(&s->iomems[3], obj, &apple_spmi_control_ops, s,
+                          TYPE_APPLE_SPMI ".control_reg",
                           sizeof(s->control_reg));
 
     memory_region_init(&s->container, obj, TYPE_APPLE_SPMI ".reg",
@@ -550,12 +550,11 @@ static void apple_spmi_init(Object *obj)
     qdev_init_gpio_in(dev, apple_spmi_set_irq, SPMI_NUM_IRQ);
 
     qdev_init_gpio_out_named(dev, &s->resp_irq, APPLE_SPMI_RESP_IRQ, 1);
-
 }
 
 SysBusDevice *apple_spmi_create(DTBNode *node)
 {
-    DeviceState  *dev;
+    DeviceState *dev;
     AppleSPMIState *s;
     SysBusDevice *sbd;
     DTBProp *prop;
@@ -593,24 +592,24 @@ SysBusDevice *apple_spmi_create(DTBNode *node)
 
 static const VMStateDescription vmstate_apple_spmi = {
     .name = "apple_spmi",
-    .fields = (VMStateField[]) {
-        VMSTATE_FIFO32(resp_fifo, AppleSPMIState),
-        VMSTATE_UINT32_ARRAY(control_reg, AppleSPMIState,
-                             0x100 / sizeof(uint32_t)),
-        VMSTATE_UINT32_ARRAY(queue_reg, AppleSPMIState,
-                             0x100 / sizeof(uint32_t)),
-        VMSTATE_UINT32_ARRAY(fault_reg, AppleSPMIState,
-                             0x100 / sizeof(uint32_t)),
-        VMSTATE_UINT32_ARRAY(fault_counter_reg, AppleSPMIState,
-                             0x64 / sizeof(uint32_t)),
-        VMSTATE_UINT32(data_length, AppleSPMIState),
-        VMSTATE_UINT32(data_filled, AppleSPMIState),
-        VMSTATE_UINT32(command, AppleSPMIState),
-        VMSTATE_VARRAY_UINT32_ALLOC(data, AppleSPMIState, data_length, 0,
-                                    vmstate_info_uint32, uint32_t),
-
-        VMSTATE_END_OF_LIST()
-    }
+    .fields =
+        (VMStateField[]){
+            VMSTATE_FIFO32(resp_fifo, AppleSPMIState),
+            VMSTATE_UINT32_ARRAY(control_reg, AppleSPMIState,
+                                 0x100 / sizeof(uint32_t)),
+            VMSTATE_UINT32_ARRAY(queue_reg, AppleSPMIState,
+                                 0x100 / sizeof(uint32_t)),
+            VMSTATE_UINT32_ARRAY(fault_reg, AppleSPMIState,
+                                 0x100 / sizeof(uint32_t)),
+            VMSTATE_UINT32_ARRAY(fault_counter_reg, AppleSPMIState,
+                                 0x64 / sizeof(uint32_t)),
+            VMSTATE_UINT32(data_length, AppleSPMIState),
+            VMSTATE_UINT32(data_filled, AppleSPMIState),
+            VMSTATE_UINT32(command, AppleSPMIState),
+            VMSTATE_VARRAY_UINT32_ALLOC(data, AppleSPMIState, data_length, 0,
+                                        vmstate_info_uint32, uint32_t),
+            VMSTATE_END_OF_LIST(),
+        }
 };
 
 static void apple_spmi_class_init(ObjectClass *klass, void *data)
@@ -623,19 +622,18 @@ static void apple_spmi_class_init(ObjectClass *klass, void *data)
     dc->desc = "Apple SPMI Controller";
     dc->vmsd = &vmstate_apple_spmi;
     set_bit(DEVICE_CATEGORY_BRIDGE, dc->categories);
-    resettable_class_set_parent_phases(rc, apple_spmi_reset_enter,
-                                       NULL,
+    resettable_class_set_parent_phases(rc, apple_spmi_reset_enter, NULL,
                                        apple_spmi_reset_exit,
                                        &c->parent_phases);
 }
 
 static const TypeInfo apple_spmi_info = {
-        .name = TYPE_APPLE_SPMI,
-        .parent = TYPE_SYS_BUS_DEVICE,
-        .instance_size = sizeof(AppleSPMIState),
-        .instance_init = apple_spmi_init,
-        .class_size = sizeof(AppleSPMIClass),
-        .class_init = apple_spmi_class_init,
+    .name = TYPE_APPLE_SPMI,
+    .parent = TYPE_SYS_BUS_DEVICE,
+    .instance_size = sizeof(AppleSPMIState),
+    .instance_init = apple_spmi_init,
+    .class_size = sizeof(AppleSPMIClass),
+    .class_init = apple_spmi_class_init,
 };
 
 static void apple_spmi_register_types(void)
@@ -644,4 +642,3 @@ static void apple_spmi_register_types(void)
 }
 
 type_init(apple_spmi_register_types);
-

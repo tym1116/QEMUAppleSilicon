@@ -154,10 +154,10 @@ static void h12p_up_write(void *opaque, hwaddr addr, uint64_t data,
 static uint64_t h12p_up_read(void *opaque, hwaddr addr, unsigned size)
 {
     AppleH12PState *s = APPLE_H12P(opaque);
-    uint64_t ret = 0;
     if (addr >= 0x200000) {
         addr -= 0x200000;
     }
+    uint64_t ret = 0;
     if (h12p_genpipe_read(&s->genpipe0, addr, &ret)) {
         info_report("[H12P] GenPipe 0: 0x" HWADDR_FMT_plx
                     " -> 0x" HWADDR_FMT_plx,

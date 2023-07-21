@@ -2,17 +2,17 @@
 #define APPLE_SIO_H
 
 #include "qemu/osdep.h"
-#include "hw/sysbus.h"
-#include "qom/object.h"
-#include "qemu/iov.h"
-#include "sysemu/dma.h"
-#include "hw/misc/apple_mbox.h"
 #include "hw/arm/xnu_dtb.h"
+#include "hw/misc/apple_mbox.h"
+#include "hw/sysbus.h"
+#include "qemu/iov.h"
+#include "qom/object.h"
+#include "sysemu/dma.h"
 
 #define TYPE_APPLE_SIO "apple.sio"
 OBJECT_DECLARE_SIMPLE_TYPE(AppleSIOState, APPLE_SIO)
 
-#define SIO_NUM_EPS         (0xdb)
+#define SIO_NUM_EPS (0xdb)
 
 typedef struct QEMU_PACKED sio_dma_config {
     uint32_t xfer;

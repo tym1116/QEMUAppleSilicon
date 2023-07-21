@@ -1,9 +1,9 @@
 #ifndef APPLE_AIC_H
 #define APPLE_AIC_H
 
+#include "hw/arm/xnu_dtb.h"
 #include "hw/sysbus.h"
 #include "qom/object.h"
-#include "hw/arm/xnu_dtb.h"
 
 #define TYPE_APPLE_AIC "apple.aic"
 OBJECT_DECLARE_SIMPLE_TYPE(AppleAICState, APPLE_AIC)
@@ -12,7 +12,7 @@ OBJECT_DECLARE_SIMPLE_TYPE(AppleAICState, APPLE_AIC)
 
 typedef struct AppleAICState AppleAICState;
 
-typedef struct  {
+typedef struct {
     AppleAICState *aic;
     qemu_irq irq;
     MemoryRegion iomem;

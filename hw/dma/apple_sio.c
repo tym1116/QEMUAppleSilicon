@@ -1,9 +1,11 @@
 #include "qemu/osdep.h"
-#include "qapi/error.h"
+#include "hw/arm/xnu.h"
+#include "hw/arm/xnu_dtb.h"
 #include "hw/dma/apple_sio.h"
-#include "hw/misc/apple_mbox.h"
 #include "hw/irq.h"
+#include "hw/misc/apple_mbox.h"
 #include "migration/vmstate.h"
+#include "qapi/error.h"
 #include "qemu/bitops.h"
 #include "qemu/iov.h"
 #include "qemu/log.h"
@@ -11,18 +13,21 @@
 #include "qemu/queue.h"
 #include "sysemu/dma.h"
 #include "sysemu/runstate.h"
-#include "hw/arm/xnu.h"
-#include "hw/arm/xnu_dtb.h"
 
-//#define DEBUG_SIO
+// #define DEBUG_SIO
 
 #ifdef DEBUG_SIO
-#define SIO_LOG_MSG(ep, msg) \
-do { qemu_log_mask(LOG_GUEST_ERROR, "SIO: message:" \
-                   " ep=%u msg=0x" HWADDR_FMT_plx "\n", \
-                   ep, msg); } while (0)
+#define SIO_LOG_MSG(ep, msg)                               \
+    do {                                                   \
+        qemu_log_mask(LOG_GUEST_ERROR,                     \
+                      "SIO: message:"                      \
+                      " ep=%u msg=0x" HWADDR_FMT_plx "\n", \
+                      ep, msg);                            \
+    } while (0)
 #else
-#define SIO_LOG_MSG(ep, msg) do {} while (0)
+#define SIO_LOG_MSG(ep, msg) \
+    do {                     \
+    } while (0)
 #endif
 
 typedef enum sio_op {
@@ -47,27 +52,27 @@ typedef enum sio_endpoint {
 } sio_endpoint;
 
 typedef enum sio_param_id {
-    PROTOCOL    = 0, /* Should be 9 for 14.0b5 */
-    DMA_SEGMENT_BASE  = 1,
-    DMA_SEGMENT_SIZE  = 2,
-    DMA_RESPONSE_BASE  = 11,
-    DMA_RESPONSE_SIZE  = 12,
-    PERF_BASE  = 13,
-    PERF_SIZE  = 14,
-    PANIC_BASE  = 15,
-    PANIC_SIZE  = 16,
-    PIO_BASE  = 26,
-    PIO_SIZE  = 27,
-    DEVICES_BASE  = 28,
-    DEVICES_SIZE  = 29,
-    TUNABLE_0_BASE  = 30,
-    TUNABLE_0_SIZE  = 31,
-    TUNABLE_1_BASE  = 32,
-    TUNABLE_1_SIZE  = 33,
-    PS_REGS_BASE  = 36,
-    PS_REGS_SIZE  = 37,
-    FORWARD_IRQS_BASE  = 38,
-    FORWARD_IRQS_SIZE  = 39,
+    PROTOCOL = 0, /* Should be 9 for 14.0b5 */
+    DMA_SEGMENT_BASE = 1,
+    DMA_SEGMENT_SIZE = 2,
+    DMA_RESPONSE_BASE = 11,
+    DMA_RESPONSE_SIZE = 12,
+    PERF_BASE = 13,
+    PERF_SIZE = 14,
+    PANIC_BASE = 15,
+    PANIC_SIZE = 16,
+    PIO_BASE = 26,
+    PIO_SIZE = 27,
+    DEVICES_BASE = 28,
+    DEVICES_SIZE = 29,
+    TUNABLE_0_BASE = 30,
+    TUNABLE_0_SIZE = 31,
+    TUNABLE_1_BASE = 32,
+    TUNABLE_1_SIZE = 33,
+    PS_REGS_BASE = 36,
+    PS_REGS_SIZE = 37,
+    FORWARD_IRQS_BASE = 38,
+    FORWARD_IRQS_SIZE = 39,
 } sio_param_id;
 
 typedef struct QEMU_PACKED sio_msg {
@@ -95,8 +100,7 @@ static void apple_sio_map_dma(AppleSIOState *s, AppleSIODMAEndpoint *ep)
 
         while (len) {
             dma_addr_t xlen = len;
-            void *mem = dma_memory_map(&s->dma_as, base,
-                                       &xlen, ep->dir,
+            void *mem = dma_memory_map(&s->dma_as, base, &xlen, ep->dir,
                                        MEMTXATTRS_UNSPECIFIED);
             if (!mem) {
                 qemu_log_mask(LOG_GUEST_ERROR, "%s: unable to map memory\n",
@@ -128,8 +132,7 @@ static void apple_sio_unmap_dma(AppleSIOState *s, AppleSIODMAEndpoint *ep)
         }
 
         dma_memory_unmap(&s->dma_as, ep->iov.iov[i].iov_base,
-                         ep->iov.iov[i].iov_len, ep->dir,
-                         access_len);
+                         ep->iov.iov[i].iov_len, ep->dir, access_len);
         unmap_length -= access_len;
     }
     qemu_iovec_destroy(&ep->iov);
@@ -185,11 +188,13 @@ int apple_sio_dma_write(AppleSIODMAEndpoint *ep, void *buffer, size_t len)
     return xlen;
 }
 
-int apple_sio_dma_remaining(AppleSIODMAEndpoint *ep) {
+int apple_sio_dma_remaining(AppleSIODMAEndpoint *ep)
+{
     return ep->iov.size - ep->actual_length;
 }
 
-static void apple_sio_control(AppleSIOState *s, AppleSIODMAEndpoint *ep, sio_msg m)
+static void apple_sio_control(AppleSIOState *s, AppleSIODMAEndpoint *ep,
+                              sio_msg m)
 {
     sio_msg reply = { 0 };
     reply.ep = m.ep;
@@ -218,7 +223,8 @@ static void apple_sio_dma(AppleSIOState *s, AppleSIODMAEndpoint *ep, sio_msg m)
     reply.tag = m.tag;
     switch (m.op) {
     case CONFIG_SHIM: {
-        dma_addr_t config_addr = (s->params[DMA_SEGMENT_BASE] << 12) + m.data * 12;
+        dma_addr_t config_addr =
+            (s->params[DMA_SEGMENT_BASE] << 12) + m.data * 12;
         if (dma_memory_read(&s->dma_as, config_addr, &ep->config,
                             sizeof(ep->config),
                             MEMTXATTRS_UNSPECIFIED) != MEMTX_OK) {
@@ -228,7 +234,8 @@ static void apple_sio_dma(AppleSIOState *s, AppleSIODMAEndpoint *ep, sio_msg m)
         break;
     }
     case START_DMA: {
-        dma_addr_t handle_addr = (s->params[DMA_SEGMENT_BASE] << 12) + m.data * 12;
+        dma_addr_t handle_addr =
+            (s->params[DMA_SEGMENT_BASE] << 12) + m.data * 12;
         dma_addr_t seg_addr = handle_addr + 0x48;
         uint32_t segment_count = 0;
         if (ep->mapped) {
@@ -250,7 +257,8 @@ static void apple_sio_dma(AppleSIOState *s, AppleSIODMAEndpoint *ep, sio_msg m)
                         segment_count * sizeof(sio_dma_segment),
                         MEMTXATTRS_UNSPECIFIED);
         for (int i = 0; i < segment_count; i++) {
-            qemu_sglist_add(&ep->sgl, ep->segments[i].addr, ep->segments[i].len);
+            qemu_sglist_add(&ep->sgl, ep->segments[i].addr,
+                            ep->segments[i].len);
         }
         apple_sio_map_dma(s, ep);
         reply.op = ACK;
@@ -280,9 +288,7 @@ static void apple_sio_dma(AppleSIOState *s, AppleSIODMAEndpoint *ep, sio_msg m)
     apple_mbox_send_message(s->mbox, 1, reply.raw);
 };
 
-static void apple_sio_handle_endpoint(void *opaque,
-                                      uint32_t ep,
-                                      uint64_t msg)
+static void apple_sio_handle_endpoint(void *opaque, uint32_t ep, uint64_t msg)
 {
     AppleSIOState *s = APPLE_SIO(opaque);
     sio_msg m = { 0 };
@@ -295,7 +301,8 @@ static void apple_sio_handle_endpoint(void *opaque,
         break;
     default:
         if (m.ep >= SIO_NUM_EPS) {
-            qemu_log_mask(LOG_UNIMP, "%s: Unknown SIO ep: %d\n", __func__, m.ep);
+            qemu_log_mask(LOG_UNIMP, "%s: Unknown SIO ep: %d\n", __func__,
+                          m.ep);
             SIO_LOG_MSG(ep, msg);
         } else {
             apple_sio_dma(s, &s->eps[m.ep], m);
@@ -329,23 +336,23 @@ AppleSIODMAEndpoint *apple_sio_get_endpoint_from_node(AppleSIOState *s,
     return apple_sio_get_endpoint(s, data[8 * idx]);
 }
 
-static void ascv2_core_reg_write(void *opaque, hwaddr addr,
-                  uint64_t data,
-                  unsigned size)
+static void ascv2_core_reg_write(void *opaque, hwaddr addr, uint64_t data,
+                                 unsigned size)
 {
 #ifdef DEBUG_SIO
-    qemu_log_mask(LOG_UNIMP, "SIO: AppleASCWrapV2 core reg WRITE @ 0x"
-                  HWADDR_FMT_plx " value: 0x" HWADDR_FMT_plx "\n", addr, data);
+    qemu_log_mask(LOG_UNIMP,
+                  "SIO: AppleASCWrapV2 core reg WRITE @ 0x" HWADDR_FMT_plx
+                  " value: 0x" HWADDR_FMT_plx "\n",
+                  addr, data);
 #endif
 }
 
-static uint64_t ascv2_core_reg_read(void *opaque,
-                     hwaddr addr,
-                     unsigned size)
+static uint64_t ascv2_core_reg_read(void *opaque, hwaddr addr, unsigned size)
 {
 #ifdef DEBUG_SIO
-    qemu_log_mask(LOG_UNIMP, "SIO: AppleASCWrapV2 core reg READ @ 0x"
-                  HWADDR_FMT_plx "\n", addr);
+    qemu_log_mask(LOG_UNIMP,
+                  "SIO: AppleASCWrapV2 core reg READ @ 0x" HWADDR_FMT_plx "\n",
+                  addr);
 #endif
     return 0;
 }
@@ -361,12 +368,11 @@ static const MemoryRegionOps ascv2_core_reg_ops = {
     .valid.unaligned = false,
 };
 
-static const struct AppleMboxOps sio_mailbox_ops = {
-};
+static const struct AppleMboxOps sio_mailbox_ops = {};
 
 SysBusDevice *apple_sio_create(DTBNode *node, uint32_t protocol_version)
 {
-    DeviceState  *dev;
+    DeviceState *dev;
     AppleSIOState *s;
     SysBusDevice *sbd;
     DTBNode *child;
@@ -392,11 +398,10 @@ SysBusDevice *apple_sio_create(DTBNode *node, uint32_t protocol_version)
      * 0: AppleA7IOP akfRegMap
      * 1: AppleASCWrapV2 coreRegisterMap
      */
-    s->mbox = apple_mbox_create("SIO", s, reg[1], protocol_version,
-                                       &sio_mailbox_ops);
+    s->mbox =
+        apple_mbox_create("SIO", s, reg[1], protocol_version, &sio_mailbox_ops);
     object_property_add_child(OBJECT(s), "mbox", OBJECT(s->mbox));
-    apple_mbox_register_endpoint(s->mbox, 1,
-                                 &apple_sio_handle_endpoint);
+    apple_mbox_register_endpoint(s->mbox, 1, &apple_sio_handle_endpoint);
 
     sysbus_init_mmio(sbd, sysbus_mmio_get_region(SYS_BUS_DEVICE(s->mbox), 0));
 
@@ -408,9 +413,9 @@ SysBusDevice *apple_sio_create(DTBNode *node, uint32_t protocol_version)
 
     data = 1;
     set_dtb_prop(child, "pre-loaded", 4, (uint8_t *)&data);
-    #if 0
+#if 0
     set_dtb_prop(child, "running", 4, (uint8_t *)&data);
-    #endif
+#endif
 
     return sbd;
 }
@@ -430,8 +435,8 @@ static void apple_sio_realize(DeviceState *dev, Error **errp)
 
     for (int i = 0; i < SIO_NUM_EPS; i++) {
         s->eps[i].id = i;
-        s->eps[i].dir = i & 1 ? DMA_DIRECTION_FROM_DEVICE :
-                                DMA_DIRECTION_TO_DEVICE;
+        s->eps[i].dir =
+            i & 1 ? DMA_DIRECTION_FROM_DEVICE : DMA_DIRECTION_TO_DEVICE;
     }
 }
 

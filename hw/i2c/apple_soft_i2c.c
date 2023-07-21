@@ -1,7 +1,8 @@
 #include "qemu/osdep.h"
+#include "hw/arm/xnu_dtb.h"
 #include "hw/i2c/apple_soft_i2c.h"
-#include "hw/i2c/i2c.h"
 #include "hw/i2c/bitbang_i2c.h"
+#include "hw/i2c/i2c.h"
 #include "hw/irq.h"
 #include "migration/vmstate.h"
 #include "qemu/bitops.h"
@@ -9,7 +10,6 @@
 #include "qemu/log.h"
 #include "qemu/module.h"
 #include "qemu/timer.h"
-#include "hw/arm/xnu_dtb.h"
 
 static void apple_soft_i2c_gpio_set(void *opaque, int line, int level)
 {
@@ -22,18 +22,16 @@ static void apple_soft_i2c_gpio_set(void *opaque, int line, int level)
     }
 }
 
-static void i2c_reg_write(void *opaque,
-                  hwaddr addr,
-                  uint64_t data,
-                  unsigned size)
+static void i2c_reg_write(void *opaque, hwaddr addr, uint64_t data,
+                          unsigned size)
 {
-    qemu_log_mask(LOG_UNIMP, "I2C: reg WRITE @ 0x" HWADDR_FMT_plx
-                  " value: 0x" HWADDR_FMT_plx "\n", addr, data);
+    qemu_log_mask(LOG_UNIMP,
+                  "I2C: reg WRITE @ 0x" HWADDR_FMT_plx
+                  " value: 0x" HWADDR_FMT_plx "\n",
+                  addr, data);
 }
 
-static uint64_t i2c_reg_read(void *opaque,
-                     hwaddr addr,
-                     unsigned size)
+static uint64_t i2c_reg_read(void *opaque, hwaddr addr, unsigned size)
 {
     qemu_log_mask(LOG_UNIMP, "I2C: reg READ @ 0x" HWADDR_FMT_plx "\n", addr);
 

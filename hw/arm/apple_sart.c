@@ -1,22 +1,26 @@
 #include "qemu/osdep.h"
-#include "qapi/error.h"
+#include "hw/arm/apple_sart.h"
+#include "hw/arm/xnu.h"
+#include "hw/arm/xnu_dtb.h"
 #include "hw/irq.h"
 #include "migration/vmstate.h"
+#include "qapi/error.h"
 #include "qemu/bitops.h"
 #include "qemu/log.h"
 #include "qemu/module.h"
 #include "sysemu/dma.h"
-#include "hw/arm/xnu.h"
-#include "hw/arm/xnu_dtb.h"
-#include "hw/arm/apple_sart.h"
 
-//#define DEBUG_SART
+// #define DEBUG_SART
 
 #ifdef DEBUG_SART
-#define DPRINTF(fmt, ...) \
-do { printf("sart: " fmt , ## __VA_ARGS__); } while (0)
+#define DPRINTF(fmt, ...)                    \
+    do {                                     \
+        printf("sart: " fmt, ##__VA_ARGS__); \
+    } while (0)
 #else
-#define DPRINTF(fmt, ...) do {} while(0)
+#define DPRINTF(fmt, ...) \
+    do {                  \
+    } while (0)
 #endif
 
 #define SART_MAX_VA_BITS 42
@@ -97,65 +101,59 @@ static inline uint32_t sart_get_region_flags(AppleSARTState *s, int region)
     }
 }
 
-static void base_reg_write(void *opaque, hwaddr addr,
-                           uint64_t data,
+static void base_reg_write(void *opaque, hwaddr addr, uint64_t data,
                            unsigned size)
 {
     AppleSARTState *s = APPLE_SART(opaque);
     uint32_t orig;
     uint32_t val = data;
-    DPRINTF("%s: %s @ 0x" HWADDR_FMT_plx
-            " value: 0x" HWADDR_FMT_plx "\n", DEVICE(s)->id,
-            __func__, addr, data);
+    DPRINTF("%s: %s @ 0x" HWADDR_FMT_plx " value: 0x" HWADDR_FMT_plx "\n",
+            DEVICE(s)->id, __func__, addr, data);
 
     orig = s->reg[addr >> 2];
 
     s->reg[addr >> 2] = val;
 
     for (int i = 0; i < SART_NUM_REGIONS; i++) {
-        if ((sart_get_region_addr(s, i) != s->regions[i].addr)
-            || (sart_get_region_size(s, i) != s->regions[i].size)
-            || (sart_get_region_flags(s, i) != s->regions[i].flags)) {
-                hwaddr curr = s->regions[i].addr;
-                for (curr = s->regions[i].addr;
-                     curr < s->regions[i].addr + s->regions[i].size;
-                     curr ++) {
-                    IOMMUTLBEvent event;
-                    event.type = IOMMU_NOTIFIER_UNMAP;
-                    event.entry.target_as = &address_space_memory;
-                    event.entry.iova = curr << 12;
-                    event.entry.perm = IOMMU_NONE;
-                    event.entry.addr_mask = 0xFFF;
-                    memory_region_notify_iommu(IOMMU_MEMORY_REGION(&s->iommu),
-                                               0, event);
-                }
-                s->regions[i].addr = sart_get_region_addr(s, i);
-                s->regions[i].size = sart_get_region_size(s, i);
-                s->regions[i].flags = sart_get_region_flags(s, i);
+        if ((sart_get_region_addr(s, i) != s->regions[i].addr) ||
+            (sart_get_region_size(s, i) != s->regions[i].size) ||
+            (sart_get_region_flags(s, i) != s->regions[i].flags)) {
+            hwaddr curr = s->regions[i].addr;
+            for (curr = s->regions[i].addr;
+                 curr < s->regions[i].addr + s->regions[i].size; curr++) {
+                IOMMUTLBEvent event;
+                event.type = IOMMU_NOTIFIER_UNMAP;
+                event.entry.target_as = &address_space_memory;
+                event.entry.iova = curr << 12;
+                event.entry.perm = IOMMU_NONE;
+                event.entry.addr_mask = 0xFFF;
+                memory_region_notify_iommu(IOMMU_MEMORY_REGION(&s->iommu), 0,
+                                           event);
             }
+            s->regions[i].addr = sart_get_region_addr(s, i);
+            s->regions[i].size = sart_get_region_size(s, i);
+            s->regions[i].flags = sart_get_region_flags(s, i);
+        }
     }
 }
 
-static uint64_t base_reg_read(void *opaque,
-                              hwaddr addr,
-                              unsigned size)
+static uint64_t base_reg_read(void *opaque, hwaddr addr, unsigned size)
 {
     AppleSARTState *s = APPLE_SART(opaque);
-    DPRINTF("%s: %s @ 0x" HWADDR_FMT_plx"\n", DEVICE(s)->id,
-            __func__, addr);
+    DPRINTF("%s: %s @ 0x" HWADDR_FMT_plx "\n", DEVICE(s)->id, __func__, addr);
 
     return s->reg[addr >> 2];
 }
 
 static const MemoryRegionOps base_reg_ops = {
-        .write = base_reg_write,
-        .read = base_reg_read,
-        .endianness = DEVICE_NATIVE_ENDIAN,
-        .impl.min_access_size = 4,
-        .impl.max_access_size = 4,
-        .valid.min_access_size = 4,
-        .valid.max_access_size = 4,
-        .valid.unaligned = false,
+    .write = base_reg_write,
+    .read = base_reg_read,
+    .endianness = DEVICE_NATIVE_ENDIAN,
+    .impl.min_access_size = 4,
+    .impl.max_access_size = 4,
+    .valid.min_access_size = 4,
+    .valid.max_access_size = 4,
+    .valid.unaligned = false,
 };
 
 static IOMMUTLBEntry apple_sart_translate(IOMMUMemoryRegion *mr, hwaddr addr,
@@ -174,12 +172,12 @@ static IOMMUTLBEntry apple_sart_translate(IOMMUMemoryRegion *mr, hwaddr addr,
     addr >>= 12;
 
     for (int i = 0; i < SART_NUM_REGIONS; i++) {
-        if ((s->regions[i].addr <= addr)
-            && (addr < s->regions[i].addr + s->regions[i].size)
-            && s->regions[i].flags) {
-                entry.perm = IOMMU_RW;
-                break;
-            }
+        if ((s->regions[i].addr <= addr) &&
+            (addr < s->regions[i].addr + s->regions[i].size) &&
+            s->regions[i].flags) {
+            entry.perm = IOMMU_RW;
+            break;
+        }
     }
     return entry;
 }
@@ -193,7 +191,7 @@ static void apple_sart_reset(DeviceState *dev)
 
 SysBusDevice *apple_sart_create(DTBNode *node)
 {
-    DeviceState  *dev;
+    DeviceState *dev;
     AppleSARTState *s;
     SysBusDevice *sbd;
     DTBProp *prop;
@@ -218,11 +216,9 @@ SysBusDevice *apple_sart_create(DTBNode *node)
     memory_region_init_io(&s->iomem, OBJECT(dev), &base_reg_ops, s,
                           TYPE_APPLE_SART ".reg", reg[1]);
     sysbus_init_mmio(sbd, &s->iomem);
-    memory_region_init_iommu(&s->iommu,
-                             sizeof(AppleSARTIOMMUMemoryRegion),
-                             TYPE_APPLE_SART_IOMMU_MEMORY_REGION,
-                             OBJECT(s), dev->id,
-                             1ULL << SART_MAX_VA_BITS);
+    memory_region_init_iommu(&s->iommu, sizeof(AppleSARTIOMMUMemoryRegion),
+                             TYPE_APPLE_SART_IOMMU_MEMORY_REGION, OBJECT(s),
+                             dev->id, 1ULL << SART_MAX_VA_BITS);
 
     sysbus_init_mmio(sbd, MEMORY_REGION(&s->iommu));
 
@@ -246,10 +242,10 @@ static void apple_sart_iommu_memory_region_class_init(ObjectClass *klass,
 }
 
 static const TypeInfo apple_sart_info = {
-        .name = TYPE_APPLE_SART,
-        .parent = TYPE_SYS_BUS_DEVICE,
-        .instance_size = sizeof(AppleSARTState),
-        .class_init = apple_sart_class_init,
+    .name = TYPE_APPLE_SART,
+    .parent = TYPE_SYS_BUS_DEVICE,
+    .instance_size = sizeof(AppleSARTState),
+    .class_init = apple_sart_class_init,
 };
 
 static const TypeInfo apple_sart_iommu_memory_region_info = {
@@ -265,4 +261,3 @@ static void apple_sart_register_types(void)
 }
 
 type_init(apple_sart_register_types);
-

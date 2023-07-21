@@ -1,12 +1,11 @@
 #ifndef HW_ARM_APPLE_A9_H
 #define HW_ARM_APPLE_A9_H
-
 #include "qemu/osdep.h"
-#include "cpu.h"
 #include "exec/hwaddr.h"
-#include "qemu/queue.h"
 #include "hw/arm/xnu_dtb.h"
 #include "hw/cpu/cluster.h"
+#include "qemu/queue.h"
+#include "cpu.h"
 
 #define A9_MAX_CPU 2
 
@@ -23,7 +22,7 @@ typedef struct AppleA9Class {
 
     DeviceRealize parent_realize;
     DeviceUnrealize parent_unrealize;
-    DeviceReset   parent_reset;
+    DeviceReset parent_reset;
 } AppleA9Class;
 
 typedef struct AppleA9State {

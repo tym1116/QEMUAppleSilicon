@@ -1,66 +1,66 @@
 #include "qemu/osdep.h"
-#include "hw/ssi/apple_spi.h"
+#include "hw/arm/xnu_dtb.h"
+#include "hw/dma/apple_sio.h"
 #include "hw/irq.h"
+#include "hw/ssi/apple_spi.h"
 #include "migration/vmstate.h"
 #include "qemu/bitops.h"
+#include "qemu/fifo32.h"
 #include "qemu/lockable.h"
 #include "qemu/log.h"
 #include "qemu/module.h"
 #include "qemu/timer.h"
-#include "hw/arm/xnu_dtb.h"
-#include "qemu/fifo32.h"
-#include "hw/dma/apple_sio.h"
 
 /* XXX: Based on linux/drivers/spi/spi-apple.c */
 
-#define R_CTRL                  0x000
-#define  R_CTRL_RUN              (1 << 0)
-#define  R_CTRL_TX_RESET         (1 << 2)
-#define  R_CTRL_RX_RESET         (1 << 3)
+#define R_CTRL 0x000
+#define R_CTRL_RUN (1 << 0)
+#define R_CTRL_TX_RESET (1 << 2)
+#define R_CTRL_RX_RESET (1 << 3)
 
-#define R_CFG                   0x004
-#define  R_CFG_AGD               (1 << 0)
-#define  R_CFG_CPHA              (1 << 1)
-#define  R_CFG_CPOL              (1 << 2)
-#define  R_CFG_MODE(_x)          (((_x) >> 5) & 0x3)
-#define  R_CFG_MODE_INVALID      0
-#define  R_CFG_MODE_IRQ          1
-#define  R_CFG_MODE_DMA          2
-#define  R_CFG_IE_RXREADY        (1 << 7)
-#define  R_CFG_IE_TXEMPTY        (1 << 8)
-#define  R_CFG_LSB_FIRST	     (1 << 13)
-#define  R_CFG_WORD_SIZE(_x)     (((_x) >> 15) & 0x3)
-#define  R_CFG_WORD_SIZE_8B      0
-#define  R_CFG_WORD_SIZE_16B     1
-#define  R_CFG_WORD_SIZE_32B     2
-#define  R_CFG_IE_COMPLETE       (1 << 21)
+#define R_CFG 0x004
+#define R_CFG_AGD (1 << 0)
+#define R_CFG_CPHA (1 << 1)
+#define R_CFG_CPOL (1 << 2)
+#define R_CFG_MODE(_x) (((_x) >> 5) & 0x3)
+#define R_CFG_MODE_INVALID 0
+#define R_CFG_MODE_IRQ 1
+#define R_CFG_MODE_DMA 2
+#define R_CFG_IE_RXREADY (1 << 7)
+#define R_CFG_IE_TXEMPTY (1 << 8)
+#define R_CFG_LSB_FIRST (1 << 13)
+#define R_CFG_WORD_SIZE(_x) (((_x) >> 15) & 0x3)
+#define R_CFG_WORD_SIZE_8B 0
+#define R_CFG_WORD_SIZE_16B 1
+#define R_CFG_WORD_SIZE_32B 2
+#define R_CFG_IE_COMPLETE (1 << 21)
 
-#define R_STATUS                0x008
-#define  R_STATUS_RXREADY	     (1 << 0)
-#define  R_STATUS_TXEMPTY        (1 << 1)
-#define  R_STATUS_RXOVERFLOW     (1 << 3)
-#define  R_STATUS_COMPLETE       (1 << 22)
-#define  R_STATUS_TXFIFO_SHIFT   (6)
-#define  R_STATUS_TXFIFO_MASK    (31 << R_STATUS_TXFIFO_SHIFT)
-#define  R_STATUS_RXFIFO_SHIFT   (11)
-#define  R_STATUS_RXFIFO_MASK    (31 << R_STATUS_RXFIFO_SHIFT)
+#define R_STATUS 0x008
+#define R_STATUS_RXREADY (1 << 0)
+#define R_STATUS_TXEMPTY (1 << 1)
+#define R_STATUS_RXOVERFLOW (1 << 3)
+#define R_STATUS_COMPLETE (1 << 22)
+#define R_STATUS_TXFIFO_SHIFT (6)
+#define R_STATUS_TXFIFO_MASK (31 << R_STATUS_TXFIFO_SHIFT)
+#define R_STATUS_RXFIFO_SHIFT (11)
+#define R_STATUS_RXFIFO_MASK (31 << R_STATUS_RXFIFO_SHIFT)
 
-#define R_PIN                   0x00c
-#define  R_PIN_CS                (1 << 1)
+#define R_PIN 0x00c
+#define R_PIN_CS (1 << 1)
 
-#define R_TXDATA                0x010
-#define R_RXDATA                0x020
-#define R_CLKDIV                0x030
-#define  R_CLKDIV_MAX            0x7ff
-#define R_RXCNT                 0x034
-#define R_WORD_DELAY            0x038
-#define R_TXCNT                 0x04c
-#define R_MAX                   (0x50)
+#define R_TXDATA 0x010
+#define R_RXDATA 0x020
+#define R_CLKDIV 0x030
+#define R_CLKDIV_MAX 0x7ff
+#define R_RXCNT 0x034
+#define R_WORD_DELAY 0x038
+#define R_TXCNT 0x04c
+#define R_MAX (0x50)
 
-#define R_FIFO_DEPTH            16
-#define R_FIFO_MAX_DEPTH        (16 * 8)
+#define R_FIFO_DEPTH 16
+#define R_FIFO_MAX_DEPTH (16 * 8)
 
-#define REG(_s,_v)             ((_s)->regs[(_v)>>2])
+#define REG(_s, _v) ((_s)->regs[(_v) >> 2])
 
 struct AppleSPIState {
     SysBusDevice parent_obj;
@@ -265,9 +265,8 @@ static void apple_spi_run(AppleSPIState *s)
     if (fifo32_is_full(&s->rx_fifo)) {
         apple_spi_flush_rx(s);
     }
-    while (!fifo32_is_full(&s->rx_fifo)
-           && (REG(s, R_RXCNT) > 0)
-           && (REG(s, R_CFG) & R_CFG_AGD)) {
+    while (!fifo32_is_full(&s->rx_fifo) && (REG(s, R_RXCNT) > 0) &&
+           (REG(s, R_CFG) & R_CFG_AGD)) {
         rx = 0;
         for (int i = 0; i < word_size; i++) {
             rx <<= 8;
@@ -293,9 +292,7 @@ static void apple_spi_run(AppleSPIState *s)
     }
 }
 
-static void apple_spi_reg_write(void *opaque,
-                                hwaddr addr,
-                                uint64_t data,
+static void apple_spi_reg_write(void *opaque, hwaddr addr, uint64_t data,
                                 unsigned size)
 {
     AppleSPIState *s = APPLE_SPI(opaque);
@@ -306,8 +303,10 @@ static void apple_spi_reg_write(void *opaque,
     bool run = false;
 
     if (addr >= R_MAX) {
-        qemu_log_mask(LOG_UNIMP, "%s: reg WRITE @ 0x" HWADDR_FMT_plx
-                      " value: 0x" HWADDR_FMT_plx "\n", __func__, addr, data);
+        qemu_log_mask(LOG_UNIMP,
+                      "%s: reg WRITE @ 0x" HWADDR_FMT_plx
+                      " value: 0x" HWADDR_FMT_plx "\n",
+                      __func__, addr, data);
         return;
     }
 
@@ -362,9 +361,7 @@ static void apple_spi_reg_write(void *opaque,
     apple_spi_update_irq(s);
 }
 
-static uint64_t apple_spi_reg_read(void *opaque,
-                                   hwaddr addr,
-                                   unsigned size)
+static uint64_t apple_spi_reg_read(void *opaque, hwaddr addr, unsigned size)
 {
     AppleSPIState *s = APPLE_SPI(opaque);
     uint32_t r;
@@ -372,7 +369,7 @@ static uint64_t apple_spi_reg_read(void *opaque,
 
     if (addr >= R_MAX) {
         qemu_log_mask(LOG_UNIMP, "%s: reg READ @ 0x" HWADDR_FMT_plx "\n",
-                                __func__, addr);
+                      __func__, addr);
         return 0;
     }
 
@@ -493,14 +490,15 @@ static const VMStateDescription vmstate_apple_spi = {
     .name = "apple_spi",
     .version_id = 1,
     .minimum_version_id = 1,
-    .fields = (VMStateField[]) {
-        VMSTATE_UINT32_ARRAY(regs, AppleSPIState, APPLE_SPI_MMIO_SIZE >> 2),
-        VMSTATE_FIFO32(rx_fifo, AppleSPIState),
-        VMSTATE_FIFO32(tx_fifo, AppleSPIState),
-        VMSTATE_UINT32(last_irq, AppleSPIState),
-        VMSTATE_UINT32(mmio_size, AppleSPIState),
-        VMSTATE_END_OF_LIST()
-    }
+    .fields =
+        (VMStateField[]){
+            VMSTATE_UINT32_ARRAY(regs, AppleSPIState, APPLE_SPI_MMIO_SIZE >> 2),
+            VMSTATE_FIFO32(rx_fifo, AppleSPIState),
+            VMSTATE_FIFO32(tx_fifo, AppleSPIState),
+            VMSTATE_UINT32(last_irq, AppleSPIState),
+            VMSTATE_UINT32(mmio_size, AppleSPIState),
+            VMSTATE_END_OF_LIST(),
+        }
 };
 
 static void apple_spi_class_init(ObjectClass *klass, void *data)

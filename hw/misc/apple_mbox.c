@@ -1,29 +1,30 @@
 #include "qemu/osdep.h"
-#include "qemu/main-loop.h"
-#include "qemu/log.h"
-#include "qemu/lockable.h"
-#include "qemu/main-loop.h"
 #include "hw/irq.h"
 #include "hw/misc/apple_mbox.h"
-#include "migration/vmstate.h"
-#include "trace.h"
 #include "hw/qdev-properties.h"
+#include "migration/vmstate.h"
+#include "qemu/lockable.h"
+#include "qemu/log.h"
+#include "qemu/main-loop.h"
+#include "trace.h"
 
-#define IOP_LOG_MSG(s, msg) \
-do { qemu_log_mask(LOG_GUEST_ERROR, "%s: message:" \
-                   " type=0x%x ep=%u QWORD0=0x" HWADDR_FMT_plx \
-                   " QWORD1=0x" HWADDR_FMT_plx " ep0_state=0x%x\n", \
-                   s->role, msg->mgmt_msg.type, msg->endpoint, \
-                   msg->data[0], msg->data[1], \
-                   s->ep0_status); } while (0)
+#define IOP_LOG_MSG(s, msg)                                            \
+    do {                                                               \
+        qemu_log_mask(LOG_GUEST_ERROR,                                 \
+                      "%s: message:"                                   \
+                      " type=0x%x ep=%u QWORD0=0x" HWADDR_FMT_plx      \
+                      " QWORD1=0x" HWADDR_FMT_plx " ep0_state=0x%x\n", \
+                      s->role, msg->mgmt_msg.type, msg->endpoint,      \
+                      msg->data[0], msg->data[1], s->ep0_status);      \
+    } while (0)
 
-#define IOP_LOG_MGMT_MSG(s, msg) \
-do { qemu_log_mask(LOG_GUEST_ERROR, "%s: message:" \
-                   " ep=0 QWORD0=0x" HWADDR_FMT_plx \
-                   " ep0_state=0x%x\n", \
-                   s->role, \
-                   msg->raw, \
-                   s->ep0_status); } while (0)
+#define IOP_LOG_MGMT_MSG(s, msg)                                            \
+    do {                                                                    \
+        qemu_log_mask(LOG_GUEST_ERROR,                                      \
+                      "%s: message:"                                        \
+                      " ep=0 QWORD0=0x" HWADDR_FMT_plx " ep0_state=0x%x\n", \
+                      s->role, msg->raw, s->ep0_status);                    \
+    } while (0)
 
 /*
  * AP -> IOP: A2I; IOP -> AP: I2A
@@ -31,97 +32,97 @@ do { qemu_log_mask(LOG_GUEST_ERROR, "%s: message:" \
  * Outbox: I2A
  */
 
-#define REG_A7V4_CPU_CTRL                   0x0044
-#define     REG_A7V4_CPU_CTRL_RUN           0x10
-#define REG_A7V4_CPU_STATUS                 0x0048
-#define     REG_A7V4_CPU_STATUS_IDLE        0x1
-#define REG_A7V4_NMI0                       0xc04
-#define REG_A7V4_NMI1                       0xc14
-#define REG_AKF_CONFIG                      0x2043
-#define REG_A7V4_INT_MASK_SET               0x8100
-#define REG_A7V4_INT_MASK_CLR               0x8104
-#define REG_A7V4_A2I_CTRL                   0x8108
-#define REG_A7V4_I2A_CTRL                   0x810C
-#define     REG_A7V4_CTRL_ENABLE            (1 << 0)
-#define     REG_A7V4_CTRL_FULL              (1 << 16)
-#define     REG_A7V4_CTRL_EMPTY             (1 << 17)
-#define     REG_A7V4_CTRL_COUNT_SHIFT       (20)
-#define     REG_A7V4_CTRL_COUNT_MASK        (0xF << 20)
-#define REG_A7V4_A2I_SEND0                  0x8800
-#define REG_A7V4_A2I_SEND1                  0x8808
-#define REG_A7V4_A2I_RECV0                  0x8810
-#define REG_A7V4_A2I_RECV1                  0x8818
-#define REG_A7V4_I2A_SEND0                  0x8820
-#define REG_A7V4_I2A_SEND1                  0x8828
-#define REG_A7V4_I2A_RECV0                  0x8830
-#define REG_A7V4_I2A_RECV1                  0x8838
+#define REG_A7V4_CPU_CTRL 0x0044
+#define REG_A7V4_CPU_CTRL_RUN 0x10
+#define REG_A7V4_CPU_STATUS 0x0048
+#define REG_A7V4_CPU_STATUS_IDLE 0x1
+#define REG_A7V4_NMI0 0xc04
+#define REG_A7V4_NMI1 0xc14
+#define REG_AKF_CONFIG 0x2043
+#define REG_A7V4_INT_MASK_SET 0x8100
+#define REG_A7V4_INT_MASK_CLR 0x8104
+#define REG_A7V4_A2I_CTRL 0x8108
+#define REG_A7V4_I2A_CTRL 0x810C
+#define REG_A7V4_CTRL_ENABLE (1 << 0)
+#define REG_A7V4_CTRL_FULL (1 << 16)
+#define REG_A7V4_CTRL_EMPTY (1 << 17)
+#define REG_A7V4_CTRL_COUNT_SHIFT (20)
+#define REG_A7V4_CTRL_COUNT_MASK (0xF << 20)
+#define REG_A7V4_A2I_SEND0 0x8800
+#define REG_A7V4_A2I_SEND1 0x8808
+#define REG_A7V4_A2I_RECV0 0x8810
+#define REG_A7V4_A2I_RECV1 0x8818
+#define REG_A7V4_I2A_SEND0 0x8820
+#define REG_A7V4_I2A_SEND1 0x8828
+#define REG_A7V4_I2A_RECV0 0x8830
+#define REG_A7V4_I2A_RECV1 0x8838
 
-#define REG_A7V2_INT_MASK_SET               0x4000
-#define REG_A7V2_INT_MASK_CLR               0x4004
-#define REG_A7V2_I2A_NON_EMPTY                  (1 << 12)
-#define REG_A7V2_I2A_EMPTY                      (1 << 8)
-#define REG_A7V2_A2I_NON_EMPTY                  (1 << 4)
-#define REG_A7V2_A2I_EMPTY                      (1 << 0)
+#define REG_A7V2_INT_MASK_SET 0x4000
+#define REG_A7V2_INT_MASK_CLR 0x4004
+#define REG_A7V2_I2A_NON_EMPTY (1 << 12)
+#define REG_A7V2_I2A_EMPTY (1 << 8)
+#define REG_A7V2_A2I_NON_EMPTY (1 << 4)
+#define REG_A7V2_A2I_EMPTY (1 << 0)
 
-#define REG_A7V2_A2I_CTRL                   0x4008
-#define REG_A7V2_I2A_CTRL                   0x4020
-#define     REG_A7V2_CTRL_ENABLE            (1 << 0)
-#define     REG_A7V2_CTRL_FULL              (1 << 16)
-#define     REG_A7V2_CTRL_EMPTY             (1 << 17)
-#define REG_A7V2_A2I_SEND0                  0x4010
-#define REG_A7V2_A2I_SEND1                  0x4014
+#define REG_A7V2_A2I_CTRL 0x4008
+#define REG_A7V2_I2A_CTRL 0x4020
+#define REG_A7V2_CTRL_ENABLE (1 << 0)
+#define REG_A7V2_CTRL_FULL (1 << 16)
+#define REG_A7V2_CTRL_EMPTY (1 << 17)
+#define REG_A7V2_A2I_SEND0 0x4010
+#define REG_A7V2_A2I_SEND1 0x4014
 
-#define REG_A7V2_A2I_RECV0                  0x4018
-#define REG_A7V2_A2I_RECV1                  0x401c
+#define REG_A7V2_A2I_RECV0 0x4018
+#define REG_A7V2_A2I_RECV1 0x401c
 
-#define REG_A7V2_I2A_SEND0                  0x4030
-#define REG_A7V2_I2A_SEND1                  0x4034
+#define REG_A7V2_I2A_SEND0 0x4030
+#define REG_A7V2_I2A_SEND1 0x4034
 
-#define REG_A7V2_I2A_RECV0                  0x4038
-#define REG_A7V2_I2A_RECV1                  0x403c
+#define REG_A7V2_I2A_RECV0 0x4038
+#define REG_A7V2_I2A_RECV1 0x403c
 
-#define REG_IOP_INT_MASK_SET                (0x100)
-#define REG_IOP_INT_MASK_CLR                (0x104)
-#define REG_IOP_I2A_CTRL                    (0x10C)
-#define     REG_IOP_I2A_CTRL_ENABLE             (1 << 0)
-#define     REG_IOP_I2A_CTRL_FULL               (1 << 16)
-#define     REG_IOP_I2A_CTRL_EMPTY              (1 << 17)
-#define     REG_IOP_I2A_CTRL_OVFL               (1 << 18)
-#define     REG_IOP_I2A_CTRL_UDFL               (1 << 19)
+#define REG_IOP_INT_MASK_SET (0x100)
+#define REG_IOP_INT_MASK_CLR (0x104)
+#define REG_IOP_I2A_CTRL (0x10C)
+#define REG_IOP_I2A_CTRL_ENABLE (1 << 0)
+#define REG_IOP_I2A_CTRL_FULL (1 << 16)
+#define REG_IOP_I2A_CTRL_EMPTY (1 << 17)
+#define REG_IOP_I2A_CTRL_OVFL (1 << 18)
+#define REG_IOP_I2A_CTRL_UDFL (1 << 19)
 
-#define REG_IOP_I2A_CTRL                    (0x10C)
-#define REG_IOP_I2A_SEND0                   (0x820)
-#define REG_IOP_I2A_SEND1                   (0x824)
-#define REG_IOP_I2A_SEND2                   (0x828)
-#define REG_IOP_I2A_SEND3                   (0x82C)
+#define REG_IOP_I2A_CTRL (0x10C)
+#define REG_IOP_I2A_SEND0 (0x820)
+#define REG_IOP_I2A_SEND1 (0x824)
+#define REG_IOP_I2A_SEND2 (0x828)
+#define REG_IOP_I2A_SEND3 (0x82C)
 
-#define REG_IOP_A2I_CTRL                    (0x108)
-#define REG_IOP_A2I_RECV0                   (0x810)
-#define REG_IOP_A2I_RECV1                   (0x814)
-#define REG_IOP_A2I_RECV2                   (0x818)
-#define REG_IOP_A2I_RECV3                   (0x81C)
+#define REG_IOP_A2I_CTRL (0x108)
+#define REG_IOP_A2I_RECV0 (0x810)
+#define REG_IOP_A2I_RECV1 (0x814)
+#define REG_IOP_A2I_RECV2 (0x818)
+#define REG_IOP_A2I_RECV3 (0x81C)
 
-#define REG_SIZE                        (0x10000)
+#define REG_SIZE (0x10000)
 
-#define IOP_INBOX_SIZE                      16
+#define IOP_INBOX_SIZE 16
 
-#define MSG_SEND_HELLO                      1
-#define MSG_RECV_HELLO                      2
-#define MSG_TYPE_PING                       3
-#define MSG_PING_ACK                        4
-#define MSG_TYPE_EPSTART                    5
-#define MSG_TYPE_REQUEST_PSTATE             6
-#define MSG_GET_PSTATE(_x)                  ((_x) & 0xfff)
-#define  PSTATE_WAIT_VR             0x201
-#define  PSTATE_ON                  0x220
-#define  PSTATE_PWRGATE             0x202
-#define  PSTATE_SLPNOMEM            0x0
-#define MSG_TYPE_POWER                      7
-#define MSG_TYPE_ROLLCALL                   8
-#define MSG_TYPE_POWERACK                   11
+#define MSG_SEND_HELLO 1
+#define MSG_RECV_HELLO 2
+#define MSG_TYPE_PING 3
+#define MSG_PING_ACK 4
+#define MSG_TYPE_EPSTART 5
+#define MSG_TYPE_REQUEST_PSTATE 6
+#define MSG_GET_PSTATE(_x) ((_x)&0xfff)
+#define PSTATE_WAIT_VR 0x201
+#define PSTATE_ON 0x220
+#define PSTATE_PWRGATE 0x202
+#define PSTATE_SLPNOMEM 0x0
+#define MSG_TYPE_POWER 7
+#define MSG_TYPE_ROLLCALL 8
+#define MSG_TYPE_POWERACK 11
 
-#define EP_MANAGEMENT               (0)
-#define EP_CRASHLOG                 (1)
+#define EP_MANAGEMENT (0)
+#define EP_CRASHLOG (1)
 
 enum apple_mbox_ep0_state {
     EP0_IDLE,
@@ -153,20 +154,20 @@ typedef struct QEMU_PACKED apple_mbox_mgmt_msg {
                 struct QEMU_PACKED {
                     uint32_t epMask;
                     /* bit x -> endpoint ((epBlock * 32) + x) */
-                    uint8_t epBlock:6;
-                    uint16_t unk38:13;
-                    uint8_t epEnded:1;
+                    uint8_t epBlock : 6;
+                    uint16_t unk38 : 13;
+                    uint8_t epEnded : 1;
                 } rollcall;
             };
         };
         struct QEMU_PACKED {
             uint32_t field_0;
             uint16_t field_32;
-            uint8_t field_48:4;
-            uint8_t type:4;
+            uint8_t field_48 : 4;
+            uint8_t type : 4;
         };
     };
-} *apple_mbox_mgmt_msg_t;
+} * apple_mbox_mgmt_msg_t;
 
 typedef struct apple_mbox_msg {
     union QEMU_PACKED {
@@ -181,7 +182,7 @@ typedef struct apple_mbox_msg {
         };
     };
     QTAILQ_ENTRY(apple_mbox_msg) entry;
-} *apple_mbox_msg_t;
+} * apple_mbox_msg_t;
 
 typedef struct apple_mbox_ep_handler_data {
     AppleMboxEPHandler *handler;
@@ -242,8 +243,8 @@ static inline uint32_t iop_outbox_flags(AppleMboxState *s)
 {
     uint32_t flags = 0;
 
-    flags = ((s->outboxCount + 1) << REG_A7V4_CTRL_COUNT_SHIFT)
-           & REG_A7V4_CTRL_COUNT_MASK;
+    flags = ((s->outboxCount + 1) << REG_A7V4_CTRL_COUNT_SHIFT) &
+            REG_A7V4_CTRL_COUNT_MASK;
 
     return flags;
 }
@@ -298,8 +299,7 @@ static void ap_update_irq(AppleMboxState *s)
  * Push a message from AP to IOP,
  * take ownership of msg
  */
-static void apple_mbox_inbox_push(AppleMboxState *s,
-                                  apple_mbox_msg_t msg)
+static void apple_mbox_inbox_push(AppleMboxState *s, apple_mbox_msg_t msg)
 {
     QTAILQ_INSERT_TAIL(&s->inbox, msg, entry);
     s->inboxCount++;
@@ -322,8 +322,7 @@ static apple_mbox_msg_t apple_mbox_pop(AppleMboxState *s)
  * Push a message from IOP to AP,
  * take ownership of msg
  */
-static void apple_mbox_push(AppleMboxState *s,
-                            apple_mbox_msg_t msg)
+static void apple_mbox_push(AppleMboxState *s, apple_mbox_msg_t msg)
 {
     QTAILQ_INSERT_TAIL(&s->outbox, msg, entry);
     s->outboxCount++;
@@ -342,7 +341,7 @@ static apple_mbox_msg_t apple_mbox_outbox_pop(AppleMboxState *s)
 }
 
 void apple_mbox_send_control_message(AppleMboxState *s, uint32_t ep,
-                                                        uint64_t msg)
+                                     uint64_t msg)
 {
     apple_mbox_msg_t m = g_new(struct apple_mbox_msg, 1);
     m->msg = msg;
@@ -417,7 +416,7 @@ static void iop_wakeup(AppleMboxState *s)
 }
 
 static void iop_handle_management_msg(void *opaque, uint32_t ep,
-                                                    uint64_t message)
+                                      uint64_t message)
 {
     AppleMboxState *s = APPLE_MBOX(opaque);
     apple_mbox_mgmt_msg_t msg = (apple_mbox_mgmt_msg_t)&message;
@@ -444,73 +443,73 @@ static void iop_handle_management_msg(void *opaque, uint32_t ep,
     }
     }
     switch (s->ep0_status) {
-        case EP0_IDLE:
-            switch (msg->type) {
-            case MSG_TYPE_REQUEST_PSTATE: {
-                struct apple_mbox_mgmt_msg m = { 0 };
+    case EP0_IDLE:
+        switch (msg->type) {
+        case MSG_TYPE_REQUEST_PSTATE: {
+            struct apple_mbox_mgmt_msg m = { 0 };
 
-                switch (MSG_GET_PSTATE(msg->raw)) {
-                case PSTATE_WAIT_VR:
-                case PSTATE_ON:
-                    iop_wakeup(s);
-                    m.type = MSG_SEND_HELLO;
-                    m.hello.major = s->protocol_version;
-                    m.hello.minor = s->protocol_version;
-                    s->ep0_status = EP0_WAIT_HELLO;
-                    s->regs[REG_A7V4_CPU_STATUS] &= ~REG_A7V4_CPU_STATUS_IDLE;
-                    apple_mbox_send_control_message(s, 0, m.raw);
-                    break;
-                case PSTATE_SLPNOMEM:
-                    m.type = MSG_TYPE_POWER;
-                    m.power.state = 0;
-                    s->regs[REG_A7V4_CPU_STATUS] = REG_A7V4_CPU_STATUS_IDLE;
-                    smp_wmb();
-                    apple_mbox_send_control_message(s, 0, m.raw);
-                    break;
-                default:
-                    break;
-                }
+            switch (MSG_GET_PSTATE(msg->raw)) {
+            case PSTATE_WAIT_VR:
+            case PSTATE_ON:
+                iop_wakeup(s);
+                m.type = MSG_SEND_HELLO;
+                m.hello.major = s->protocol_version;
+                m.hello.minor = s->protocol_version;
+                s->ep0_status = EP0_WAIT_HELLO;
+                s->regs[REG_A7V4_CPU_STATUS] &= ~REG_A7V4_CPU_STATUS_IDLE;
+                apple_mbox_send_control_message(s, 0, m.raw);
                 break;
-            }
+            case PSTATE_SLPNOMEM:
+                m.type = MSG_TYPE_POWER;
+                m.power.state = 0;
+                s->regs[REG_A7V4_CPU_STATUS] = REG_A7V4_CPU_STATUS_IDLE;
+                smp_wmb();
+                apple_mbox_send_control_message(s, 0, m.raw);
+                break;
             default:
-                IOP_LOG_MGMT_MSG(s, msg);
                 break;
             }
             break;
-        case EP0_WAIT_HELLO:
-            if (msg->type == MSG_RECV_HELLO) {
-                iop_start_rollcall(s);
-            } else {
-                IOP_LOG_MGMT_MSG(s, msg);
-            }
-            break;
-        case EP0_WAIT_ROLLCALL:
-            switch (msg->type) {
-            case MSG_TYPE_ROLLCALL: {
-                struct apple_mbox_mgmt_msg m = { 0 };
-                if (QTAILQ_EMPTY(&s->rollcall)) {
-                    m.type = MSG_TYPE_POWER;
-                    m.power.state = 32;
-                    s->ep0_status = EP0_IDLE;
-                    apple_mbox_send_control_message(s, 0, m.raw);
-                } else {
-                    apple_mbox_msg_t m = QTAILQ_FIRST(&s->rollcall);
-                    QTAILQ_REMOVE(&s->rollcall, m, entry);
-                    apple_mbox_push(s, m);
-                }
-                break;
-            }
-            case MSG_TYPE_EPSTART: {
-                IOP_LOG_MGMT_MSG(s, msg);
-                break;
-            }
-            default:
-                IOP_LOG_MGMT_MSG(s, msg);
-            }
-            break;
+        }
         default:
             IOP_LOG_MGMT_MSG(s, msg);
             break;
+        }
+        break;
+    case EP0_WAIT_HELLO:
+        if (msg->type == MSG_RECV_HELLO) {
+            iop_start_rollcall(s);
+        } else {
+            IOP_LOG_MGMT_MSG(s, msg);
+        }
+        break;
+    case EP0_WAIT_ROLLCALL:
+        switch (msg->type) {
+        case MSG_TYPE_ROLLCALL: {
+            struct apple_mbox_mgmt_msg m = { 0 };
+            if (QTAILQ_EMPTY(&s->rollcall)) {
+                m.type = MSG_TYPE_POWER;
+                m.power.state = 32;
+                s->ep0_status = EP0_IDLE;
+                apple_mbox_send_control_message(s, 0, m.raw);
+            } else {
+                apple_mbox_msg_t m = QTAILQ_FIRST(&s->rollcall);
+                QTAILQ_REMOVE(&s->rollcall, m, entry);
+                apple_mbox_push(s, m);
+            }
+            break;
+        }
+        case MSG_TYPE_EPSTART: {
+            IOP_LOG_MGMT_MSG(s, msg);
+            break;
+        }
+        default:
+            IOP_LOG_MGMT_MSG(s, msg);
+        }
+        break;
+    default:
+        IOP_LOG_MGMT_MSG(s, msg);
+        break;
     }
 end:
     return;
@@ -523,7 +522,8 @@ static void apple_mbox_bh(void *opaque)
     if (s->real) {
         return;
     }
-    WITH_QEMU_LOCK_GUARD(&s->mutex) {
+    WITH_QEMU_LOCK_GUARD(&s->mutex)
+    {
         while (!apple_mbox_empty(s)) {
             apple_mbox_msg_t msg = apple_mbox_pop(s);
             apple_mbox_ep_handler_data *hd = NULL;
@@ -531,11 +531,13 @@ static void apple_mbox_bh(void *opaque)
             if (hd && hd->handler) {
                 /* TODO: Better API */
                 hd->handler(hd->opaque,
-                            msg->endpoint >= 31 ? msg->endpoint - 31
-                                                : msg->endpoint, msg->msg);
+                            msg->endpoint >= 31 ? msg->endpoint - 31 :
+                                                  msg->endpoint,
+                            msg->msg);
             } else {
                 qemu_log_mask(LOG_GUEST_ERROR,
-                              "%s: Unexpected message to endpoint %u\n", s->role, msg->endpoint);
+                              "%s: Unexpected message to endpoint %u\n",
+                              s->role, msg->endpoint);
                 IOP_LOG_MSG(s, msg);
             }
             g_free(msg);
@@ -543,57 +545,58 @@ static void apple_mbox_bh(void *opaque)
     }
 }
 
-static void apple_mbox_reg_write(void *opaque, hwaddr addr,
-                                 uint64_t data, unsigned size)
+static void apple_mbox_reg_write(void *opaque, hwaddr addr, uint64_t data,
+                                 unsigned size)
 {
     AppleMboxState *s = APPLE_MBOX(opaque);
     bool doorbell = false;
     bool iflg = false;
 
     s->int_mask = 0;
-    WITH_QEMU_LOCK_GUARD(&s->mutex) {
+    WITH_QEMU_LOCK_GUARD(&s->mutex)
+    {
         switch (addr) {
-            case REG_A7V4_CPU_CTRL:
-                if (data & REG_A7V4_CPU_CTRL_RUN) {
-                    struct apple_mbox_mgmt_msg m = { 0 };
-                    s->regs[REG_A7V4_CPU_STATUS] &= ~REG_A7V4_CPU_STATUS_IDLE;
-                    iop_start(s);
+        case REG_A7V4_CPU_CTRL:
+            if (data & REG_A7V4_CPU_CTRL_RUN) {
+                struct apple_mbox_mgmt_msg m = { 0 };
+                s->regs[REG_A7V4_CPU_STATUS] &= ~REG_A7V4_CPU_STATUS_IDLE;
+                iop_start(s);
 
-                    m.type = MSG_SEND_HELLO;
-                    m.hello.major = s->protocol_version;
-                    m.hello.minor = s->protocol_version;
-                    s->ep0_status = EP0_WAIT_HELLO;
+                m.type = MSG_SEND_HELLO;
+                m.hello.major = s->protocol_version;
+                m.hello.minor = s->protocol_version;
+                s->ep0_status = EP0_WAIT_HELLO;
 
-                    apple_mbox_send_control_message(s, 0, m.raw);
-                }
-                break;
-
-            case REG_A7V4_A2I_SEND0:
-            case REG_A7V4_A2I_SEND1:
-            {
-                if (addr + size == REG_A7V4_A2I_SEND0 + 16) {
-                    doorbell = true;
-                }
-                break;
+                apple_mbox_send_control_message(s, 0, m.raw);
             }
-            case REG_A7V4_A2I_CTRL:
-            case REG_A7V4_I2A_CTRL:
-                data &= REG_A7V4_CTRL_ENABLE;
-                break;
-            case REG_A7V4_INT_MASK_SET:
-                s->int_mask |= data;
-                iflg = true;
-                break;
-            case REG_A7V4_INT_MASK_CLR:
-                s->int_mask &= ~data;
-                iflg = true;
-                break;
-            default:
-                qemu_log_mask(LOG_GUEST_ERROR,
-                              "%s: AppleA7IOP AKF unknown reg WRITE @ 0x"
-                              HWADDR_FMT_plx " value: 0x" HWADDR_FMT_plx "\n",
-                              s->role, addr, data);
-                break;
+            break;
+
+        case REG_A7V4_A2I_SEND0:
+        case REG_A7V4_A2I_SEND1: {
+            if (addr + size == REG_A7V4_A2I_SEND0 + 16) {
+                doorbell = true;
+            }
+            break;
+        }
+        case REG_A7V4_A2I_CTRL:
+        case REG_A7V4_I2A_CTRL:
+            data &= REG_A7V4_CTRL_ENABLE;
+            break;
+        case REG_A7V4_INT_MASK_SET:
+            s->int_mask |= data;
+            iflg = true;
+            break;
+        case REG_A7V4_INT_MASK_CLR:
+            s->int_mask &= ~data;
+            iflg = true;
+            break;
+        default:
+            qemu_log_mask(
+                LOG_GUEST_ERROR,
+                "%s: AppleA7IOP AKF unknown reg WRITE @ 0x" HWADDR_FMT_plx
+                " value: 0x" HWADDR_FMT_plx "\n",
+                s->role, addr, data);
+            break;
         }
 
         memcpy(&s->regs[addr], &data, size);
@@ -611,17 +614,16 @@ static void apple_mbox_reg_write(void *opaque, hwaddr addr,
     }
 }
 
-static uint64_t apple_mbox_reg_read(void *opaque, hwaddr addr,
-                                    unsigned size)
+static uint64_t apple_mbox_reg_read(void *opaque, hwaddr addr, unsigned size)
 {
     AppleMboxState *s = APPLE_MBOX(opaque);
     uint64_t ret = 0;
-    WITH_QEMU_LOCK_GUARD(&s->mutex) {
+    WITH_QEMU_LOCK_GUARD(&s->mutex)
+    {
         apple_mbox_msg_t m;
         memcpy(&ret, &s->regs[addr], size);
 
         switch (addr) {
-
         case REG_A7V4_I2A_RECV0:
             m = apple_mbox_outbox_pop(s);
             if (!m) {
@@ -640,23 +642,25 @@ static uint64_t apple_mbox_reg_read(void *opaque, hwaddr addr,
             if (apple_mbox_empty(s)) {
                 ret |= REG_A7V4_CTRL_EMPTY;
             } else {
-                ret |= (s->inboxCount << REG_A7V4_CTRL_COUNT_SHIFT)
-                       & REG_A7V4_CTRL_COUNT_MASK;
+                ret |= (s->inboxCount << REG_A7V4_CTRL_COUNT_SHIFT) &
+                       REG_A7V4_CTRL_COUNT_MASK;
             }
             break;
         case REG_A7V4_I2A_CTRL:
             if (apple_mbox_outbox_empty(s)) {
                 ret |= REG_A7V4_CTRL_EMPTY;
             } else {
-                ret |= (s->outboxCount << REG_A7V4_CTRL_COUNT_SHIFT)
-                       & REG_A7V4_CTRL_COUNT_MASK;
+                ret |= (s->outboxCount << REG_A7V4_CTRL_COUNT_SHIFT) &
+                       REG_A7V4_CTRL_COUNT_MASK;
             }
             break;
         case REG_A7V4_CPU_STATUS:
             break;
         default:
-            qemu_log_mask(LOG_UNIMP, "%s: AppleA7IOP AKF unknown reg READ @ 0x"
-                                     HWADDR_FMT_plx "\n", s->role, addr);
+            qemu_log_mask(
+                LOG_UNIMP,
+                "%s: AppleA7IOP AKF unknown reg READ @ 0x" HWADDR_FMT_plx "\n",
+                s->role, addr);
             break;
         }
     }
@@ -665,65 +669,66 @@ static uint64_t apple_mbox_reg_read(void *opaque, hwaddr addr,
 }
 
 static const MemoryRegionOps apple_mbox_reg_ops = {
-        .write = apple_mbox_reg_write,
-        .read = apple_mbox_reg_read,
-        .endianness = DEVICE_NATIVE_ENDIAN,
-        .valid.min_access_size = 4,
-        .valid.max_access_size = 8,
-        .impl.min_access_size = 4,
-        .impl.max_access_size = 8,
-        .valid.unaligned = false,
+    .write = apple_mbox_reg_write,
+    .read = apple_mbox_reg_read,
+    .endianness = DEVICE_NATIVE_ENDIAN,
+    .valid.min_access_size = 4,
+    .valid.max_access_size = 8,
+    .impl.min_access_size = 4,
+    .impl.max_access_size = 8,
+    .valid.unaligned = false,
 };
 
-static void apple_mbox_v2_reg_write(void *opaque, hwaddr addr,
-                                    uint64_t data, unsigned size)
+static void apple_mbox_v2_reg_write(void *opaque, hwaddr addr, uint64_t data,
+                                    unsigned size)
 {
     AppleMboxState *s = APPLE_MBOX(opaque);
     bool doorbell = false;
     bool iflg = false;
 
-    WITH_QEMU_LOCK_GUARD(&s->mutex) {
+    WITH_QEMU_LOCK_GUARD(&s->mutex)
+    {
         switch (addr) {
-            case REG_A7V4_CPU_CTRL:
-                if (data & REG_A7V4_CPU_CTRL_RUN) {
-                    struct apple_mbox_mgmt_msg m = { 0 };
-                    iop_start(s);
+        case REG_A7V4_CPU_CTRL:
+            if (data & REG_A7V4_CPU_CTRL_RUN) {
+                struct apple_mbox_mgmt_msg m = { 0 };
+                iop_start(s);
 
-                    m.type = MSG_SEND_HELLO;
-                    m.hello.major = s->protocol_version;
-                    m.hello.minor = s->protocol_version;
-                    s->ep0_status = EP0_WAIT_HELLO;
+                m.type = MSG_SEND_HELLO;
+                m.hello.major = s->protocol_version;
+                m.hello.minor = s->protocol_version;
+                s->ep0_status = EP0_WAIT_HELLO;
 
-                    apple_mbox_send_control_message(s, 0, m.raw);
-                }
-                break;
-
-            case REG_A7V2_A2I_SEND0:
-            case REG_A7V2_A2I_SEND1:
-            {
-                if (addr + size == REG_A7V2_A2I_SEND0 + 8) {
-                    doorbell = true;
-                }
-                break;
+                apple_mbox_send_control_message(s, 0, m.raw);
             }
-            case REG_A7V2_A2I_CTRL:
-            case REG_A7V2_I2A_CTRL:
-                data &= REG_A7V2_CTRL_ENABLE;
-                break;
-            case REG_A7V2_INT_MASK_SET:
-                s->int_mask |= (uint32_t)data;
-                iflg = true;
-                break;
-            case REG_A7V2_INT_MASK_CLR:
-                s->int_mask &= ~(uint32_t)data;
-                iflg = true;
-                break;
-            default:
-                qemu_log_mask(LOG_GUEST_ERROR,
-                              "%s: AppleA7IOP AKF unknown reg WRITE @ 0x"
-                              HWADDR_FMT_plx " value: 0x" HWADDR_FMT_plx "\n",
-                              s->role, addr, data);
-                break;
+            break;
+
+        case REG_A7V2_A2I_SEND0:
+        case REG_A7V2_A2I_SEND1: {
+            if (addr + size == REG_A7V2_A2I_SEND0 + 8) {
+                doorbell = true;
+            }
+            break;
+        }
+        case REG_A7V2_A2I_CTRL:
+        case REG_A7V2_I2A_CTRL:
+            data &= REG_A7V2_CTRL_ENABLE;
+            break;
+        case REG_A7V2_INT_MASK_SET:
+            s->int_mask |= (uint32_t)data;
+            iflg = true;
+            break;
+        case REG_A7V2_INT_MASK_CLR:
+            s->int_mask &= ~(uint32_t)data;
+            iflg = true;
+            break;
+        default:
+            qemu_log_mask(
+                LOG_GUEST_ERROR,
+                "%s: AppleA7IOP AKF unknown reg WRITE @ 0x" HWADDR_FMT_plx
+                " value: 0x" HWADDR_FMT_plx "\n",
+                s->role, addr, data);
+            break;
         }
 
         memcpy(&s->regs[addr], &data, size);
@@ -741,18 +746,17 @@ static void apple_mbox_v2_reg_write(void *opaque, hwaddr addr,
     }
 }
 
-static uint64_t apple_mbox_v2_reg_read(void *opaque, hwaddr addr,
-                                       unsigned size)
+static uint64_t apple_mbox_v2_reg_read(void *opaque, hwaddr addr, unsigned size)
 {
     AppleMboxState *s = APPLE_MBOX(opaque);
     uint64_t ret = 0;
 
-    WITH_QEMU_LOCK_GUARD(&s->mutex) {
+    WITH_QEMU_LOCK_GUARD(&s->mutex)
+    {
         apple_mbox_msg_t m;
         memcpy(&ret, &s->regs[addr], size);
 
         switch (addr) {
-
         case REG_A7V2_I2A_RECV0:
             m = apple_mbox_outbox_pop(s);
             if (!m) {
@@ -778,8 +782,10 @@ static uint64_t apple_mbox_v2_reg_read(void *opaque, hwaddr addr,
             }
             break;
         default:
-            qemu_log_mask(LOG_UNIMP, "%s: AppleA7IOP AKF unknown reg READ @ 0x"
-                                     HWADDR_FMT_plx "\n", s->role, addr);
+            qemu_log_mask(
+                LOG_UNIMP,
+                "%s: AppleA7IOP AKF unknown reg READ @ 0x" HWADDR_FMT_plx "\n",
+                s->role, addr);
             break;
         }
     }
@@ -788,50 +794,51 @@ static uint64_t apple_mbox_v2_reg_read(void *opaque, hwaddr addr,
 }
 
 static const MemoryRegionOps apple_mbox_v2_reg_ops = {
-        .write = apple_mbox_v2_reg_write,
-        .read = apple_mbox_v2_reg_read,
-        .endianness = DEVICE_NATIVE_ENDIAN,
-        .valid.min_access_size = 4,
-        .valid.max_access_size = 8,
-        .impl.min_access_size = 4,
-        .impl.max_access_size = 8,
-        .valid.unaligned = false,
+    .write = apple_mbox_v2_reg_write,
+    .read = apple_mbox_v2_reg_read,
+    .endianness = DEVICE_NATIVE_ENDIAN,
+    .valid.min_access_size = 4,
+    .valid.max_access_size = 8,
+    .impl.min_access_size = 4,
+    .impl.max_access_size = 8,
+    .valid.unaligned = false,
 };
 
-static void apple_mbox_iop_reg_write(void *opaque, hwaddr addr,
-                                     uint64_t data, unsigned size)
+static void apple_mbox_iop_reg_write(void *opaque, hwaddr addr, uint64_t data,
+                                     unsigned size)
 {
     AppleMboxState *s = APPLE_MBOX(opaque);
     bool doorbell = false;
     bool iflg = false;
     uint32_t value = data;
 
-    WITH_QEMU_LOCK_GUARD(&s->mutex) {
+    WITH_QEMU_LOCK_GUARD(&s->mutex)
+    {
         switch (addr) {
-            case REG_IOP_I2A_SEND0:
-            case REG_IOP_I2A_SEND1:
-            case REG_IOP_I2A_SEND2:
-            case REG_IOP_I2A_SEND3:
-            {
-                if (addr + size == REG_IOP_I2A_SEND0 + 16) {
-                    doorbell = true;
-                }
-                break;
+        case REG_IOP_I2A_SEND0:
+        case REG_IOP_I2A_SEND1:
+        case REG_IOP_I2A_SEND2:
+        case REG_IOP_I2A_SEND3: {
+            if (addr + size == REG_IOP_I2A_SEND0 + 16) {
+                doorbell = true;
             }
-            case REG_IOP_INT_MASK_SET:
-                s->iop_int_mask |= value;
-                iflg = true;
-                break;
-            case REG_IOP_INT_MASK_CLR:
-                s->iop_int_mask &= ~value;
-                iflg = true;
-                break;
-            default:
-                qemu_log_mask(LOG_GUEST_ERROR,
-                              "%s: AppleA7IOP AKF unknown IOP reg WRITE @ 0x"
-                              HWADDR_FMT_plx " value: 0x" HWADDR_FMT_plx "\n",
-                              s->role, addr, data);
-                break;
+            break;
+        }
+        case REG_IOP_INT_MASK_SET:
+            s->iop_int_mask |= value;
+            iflg = true;
+            break;
+        case REG_IOP_INT_MASK_CLR:
+            s->iop_int_mask &= ~value;
+            iflg = true;
+            break;
+        default:
+            qemu_log_mask(
+                LOG_GUEST_ERROR,
+                "%s: AppleA7IOP AKF unknown IOP reg WRITE @ 0x" HWADDR_FMT_plx
+                " value: 0x" HWADDR_FMT_plx "\n",
+                s->role, addr, data);
+            break;
         }
         memcpy(&s->iop_regs[addr], &data, size);
 
@@ -846,7 +853,6 @@ static void apple_mbox_iop_reg_write(void *opaque, hwaddr addr,
         if (iflg) {
             iop_update_irq(s);
         }
-
     }
 }
 
@@ -855,7 +861,8 @@ static uint64_t apple_mbox_iop_reg_read(void *opaque, hwaddr addr,
 {
     AppleMboxState *s = APPLE_MBOX(opaque);
 
-    WITH_QEMU_LOCK_GUARD(&s->mutex) {
+    WITH_QEMU_LOCK_GUARD(&s->mutex)
+    {
         apple_mbox_msg_t m;
         uint32_t ret = 0;
         memcpy(&ret, &s->iop_regs[addr], sizeof(ret));
@@ -887,9 +894,11 @@ static uint64_t apple_mbox_iop_reg_read(void *opaque, hwaddr addr,
         case REG_IOP_A2I_RECV3:
             break;
         default:
-            qemu_log_mask(LOG_UNIMP, "%s: AppleA7IOP AKF unknown IOP reg READ @ 0x"
-                                     HWADDR_FMT_plx " ret: 0x%08x\n",
-                                     s->role, addr, ret);
+            qemu_log_mask(
+                LOG_UNIMP,
+                "%s: AppleA7IOP AKF unknown IOP reg READ @ 0x" HWADDR_FMT_plx
+                " ret: 0x%08x\n",
+                s->role, addr, ret);
             break;
         }
 
@@ -900,21 +909,21 @@ static uint64_t apple_mbox_iop_reg_read(void *opaque, hwaddr addr,
 }
 
 static const MemoryRegionOps apple_mbox_iop_reg_ops = {
-        .write = apple_mbox_iop_reg_write,
-        .read = apple_mbox_iop_reg_read,
-        .endianness = DEVICE_NATIVE_ENDIAN,
-        .valid.min_access_size = 4,
-        .valid.max_access_size = 4,
-        .impl.min_access_size = 4,
-        .impl.max_access_size = 4,
-        .valid.unaligned = false,
+    .write = apple_mbox_iop_reg_write,
+    .read = apple_mbox_iop_reg_read,
+    .endianness = DEVICE_NATIVE_ENDIAN,
+    .valid.min_access_size = 4,
+    .valid.max_access_size = 4,
+    .impl.min_access_size = 4,
+    .impl.max_access_size = 4,
+    .valid.unaligned = false,
 };
 
 void apple_mbox_set_real(AppleMboxState *s, bool real)
 {
     s->real = real;
     qemu_log_mask(LOG_UNIMP, "AppleA7IOP set real: %s\n",
-                                             real ? "true" : "false");
+                  real ? "true" : "false");
     smp_wmb();
 }
 
@@ -951,9 +960,8 @@ void apple_mbox_register_control_endpoint(AppleMboxState *s, uint32_t ep,
 }
 
 static void
-    apple_mbox_register_control_endpoint_internal(AppleMboxState *s,
-                                                  uint32_t ep,
-                                                  AppleMboxEPHandler *handler)
+apple_mbox_register_control_endpoint_internal(AppleMboxState *s, uint32_t ep,
+                                              AppleMboxEPHandler *handler)
 {
     assert(ep < 31);
     apple_mbox_ep_handler_data *hd = g_new0(apple_mbox_ep_handler_data, 1);
@@ -962,13 +970,11 @@ static void
     g_tree_insert(s->endpoints, GUINT_TO_POINTER(ep), hd);
 }
 
-AppleMboxState *apple_mbox_create(const char *role,
-                                  void *opaque,
-                                  uint64_t mmio_size,
-                                  uint32_t protocol_version,
+AppleMboxState *apple_mbox_create(const char *role, void *opaque,
+                                  uint64_t mmio_size, uint32_t protocol_version,
                                   const struct AppleMboxOps *ops)
 {
-    DeviceState  *dev;
+    DeviceState *dev;
     SysBusDevice *sbd;
     AppleMboxState *s;
     int i;
@@ -995,12 +1001,12 @@ AppleMboxState *apple_mbox_create(const char *role,
     /*
      * 0: AppleA7IOP akfRegMap
      */
-    memory_region_init_io(&s->mmio, OBJECT(dev), &apple_mbox_reg_ops, s,
-                          name, mmio_size);
+    memory_region_init_io(&s->mmio, OBJECT(dev), &apple_mbox_reg_ops, s, name,
+                          mmio_size);
     sysbus_init_mmio(sbd, &s->mmio);
 
-    memory_region_init_io(&s->iop_mmio, OBJECT(dev), &apple_mbox_iop_reg_ops,
-                          s, name, mmio_size);
+    memory_region_init_io(&s->iop_mmio, OBJECT(dev), &apple_mbox_iop_reg_ops, s,
+                          name, mmio_size);
     sysbus_init_mmio(sbd, &s->iop_mmio);
 
     memory_region_init_io(&s->mmio_v2, OBJECT(dev), &apple_mbox_v2_reg_ops, s,
@@ -1040,7 +1046,8 @@ static void apple_mbox_reset(DeviceState *dev)
 
     s->ep0_status = EP0_IDLE;
 
-    WITH_QEMU_LOCK_GUARD(&s->mutex) {
+    WITH_QEMU_LOCK_GUARD(&s->mutex)
+    {
         while (!QTAILQ_EMPTY(&s->inbox)) {
             apple_mbox_msg_t m = QTAILQ_FIRST(&s->inbox);
             QTAILQ_REMOVE(&s->inbox, m, entry);
@@ -1064,7 +1071,8 @@ static int apple_mbox_post_load(void *opaque, int version_id)
 {
     AppleMboxState *s = APPLE_MBOX(opaque);
 
-    WITH_QEMU_LOCK_GUARD(&s->mutex) {
+    WITH_QEMU_LOCK_GUARD(&s->mutex)
+    {
         if (!apple_mbox_empty(s)) {
             qemu_bh_schedule(s->bh);
         }
@@ -1081,10 +1089,11 @@ static const VMStateDescription vmstate_apple_mbox_msg = {
     .name = "apple_mbox_msg",
     .version_id = 1,
     .minimum_version_id = 1,
-    .fields = (VMStateField[]) {
-        VMSTATE_UINT64_ARRAY(data, struct apple_mbox_msg, 2),
-        VMSTATE_END_OF_LIST()
-    }
+    .fields =
+        (VMStateField[]){
+            VMSTATE_UINT64_ARRAY(data, struct apple_mbox_msg, 2),
+            VMSTATE_END_OF_LIST(),
+        }
 };
 
 static const VMStateDescription vmstate_apple_mbox = {
@@ -1092,23 +1101,23 @@ static const VMStateDescription vmstate_apple_mbox = {
     .version_id = 1,
     .minimum_version_id = 1,
     .post_load = apple_mbox_post_load,
-    .fields = (VMStateField[]) {
-        VMSTATE_BOOL(real, AppleMboxState),
-        VMSTATE_UINT32(int_mask, AppleMboxState),
-        VMSTATE_UINT32(iop_int_mask, AppleMboxState),
-        VMSTATE_UINT32(ep0_status, AppleMboxState),
-        VMSTATE_UINT32(protocol_version, AppleMboxState),
-        VMSTATE_UINT8_ARRAY(regs, AppleMboxState, REG_SIZE),
-        VMSTATE_UINT8_ARRAY(iop_regs, AppleMboxState, REG_SIZE),
-        VMSTATE_QTAILQ_V(inbox, AppleMboxState, 1, vmstate_apple_mbox_msg,
-                        struct apple_mbox_msg, entry),
-        VMSTATE_QTAILQ_V(outbox, AppleMboxState, 1, vmstate_apple_mbox_msg,
-                        struct apple_mbox_msg, entry),
-        VMSTATE_UINT32(inboxCount, AppleMboxState),
-        VMSTATE_UINT32(outboxCount, AppleMboxState),
-
-        VMSTATE_END_OF_LIST()
-    }
+    .fields =
+        (VMStateField[]){
+            VMSTATE_BOOL(real, AppleMboxState),
+            VMSTATE_UINT32(int_mask, AppleMboxState),
+            VMSTATE_UINT32(iop_int_mask, AppleMboxState),
+            VMSTATE_UINT32(ep0_status, AppleMboxState),
+            VMSTATE_UINT32(protocol_version, AppleMboxState),
+            VMSTATE_UINT8_ARRAY(regs, AppleMboxState, REG_SIZE),
+            VMSTATE_UINT8_ARRAY(iop_regs, AppleMboxState, REG_SIZE),
+            VMSTATE_QTAILQ_V(inbox, AppleMboxState, 1, vmstate_apple_mbox_msg,
+                             struct apple_mbox_msg, entry),
+            VMSTATE_QTAILQ_V(outbox, AppleMboxState, 1, vmstate_apple_mbox_msg,
+                             struct apple_mbox_msg, entry),
+            VMSTATE_UINT32(inboxCount, AppleMboxState),
+            VMSTATE_UINT32(outboxCount, AppleMboxState),
+            VMSTATE_END_OF_LIST(),
+        }
 };
 
 static void apple_mbox_class_init(ObjectClass *klass, void *data)
@@ -1125,10 +1134,10 @@ static void apple_mbox_class_init(ObjectClass *klass, void *data)
 }
 
 static const TypeInfo apple_mbox_info = {
-        .name = TYPE_APPLE_MBOX,
-        .parent = TYPE_SYS_BUS_DEVICE,
-        .instance_size = sizeof(AppleMboxState),
-        .class_init = apple_mbox_class_init,
+    .name = TYPE_APPLE_MBOX,
+    .parent = TYPE_SYS_BUS_DEVICE,
+    .instance_size = sizeof(AppleMboxState),
+    .class_init = apple_mbox_class_init,
 };
 
 static void apple_mbox_register_types(void)

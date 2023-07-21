@@ -1,48 +1,55 @@
 #include "qemu/osdep.h"
+#include "hw/arm/xnu.h"
+#include "hw/arm/xnu_dtb.h"
+#include "hw/block/apple_ans.h"
+#include "hw/block/block.h"
+#include "hw/irq.h"
+#include "hw/misc/apple_mbox.h"
+#include "hw/nvme/nvme.h"
+#include "hw/pci/msi.h"
+#include "hw/pci/msix.h"
+#include "hw/pci/pci.h"
+#include "hw/pci/pcie_host.h"
+#include "migration/vmstate.h"
+#include "qapi/error.h"
 #include "qemu/bitops.h"
 #include "qemu/log.h"
 #include "qemu/module.h"
-#include "qapi/error.h"
-#include "hw/irq.h"
-#include "hw/block/block.h"
-#include "hw/pci/pci.h"
-#include "hw/pci/pcie_host.h"
-#include "hw/pci/msi.h"
-#include "hw/pci/msix.h"
 #include "sysemu/dma.h"
-#include "hw/nvme/nvme.h"
-#include "migration/vmstate.h"
-#include "hw/arm/xnu.h"
-#include "hw/arm/xnu_dtb.h"
-#include "hw/misc/apple_mbox.h"
-#include "hw/block/apple_ans.h"
 
-//#define DEBUG_ANS
+// #define DEBUG_ANS
 #ifdef DEBUG_ANS
-#define DPRINTF(fmt, ...) \
-do { qemu_log_mask(LOG_UNIMP, fmt , ## __VA_ARGS__); } while (0)
+#define DPRINTF(fmt, ...)                             \
+    do {                                              \
+        qemu_log_mask(LOG_UNIMP, fmt, ##__VA_ARGS__); \
+    } while (0)
 #else
-#define DPRINTF(fmt, ...) do {} while(0)
+#define DPRINTF(fmt, ...) \
+    do {                  \
+    } while (0)
 #endif
 
 #define TYPE_APPLE_ANS "apple.ans"
 OBJECT_DECLARE_SIMPLE_TYPE(AppleANSState, APPLE_ANS)
 
-#define ANS_LOG_MSG(ep, msg) \
-do { qemu_log_mask(LOG_GUEST_ERROR, "ANS2: message:" \
-                   " ep=%u msg=0x" HWADDR_FMT_plx, \
-                   ep, msg); } while (0)
+#define ANS_LOG_MSG(ep, msg)                          \
+    do {                                              \
+        qemu_log_mask(LOG_GUEST_ERROR,                \
+                      "ANS2: message:"                \
+                      " ep=%u msg=0x" HWADDR_FMT_plx, \
+                      ep, msg);                       \
+    } while (0)
 
-#define NVME_APPLE_MAX_PEND_CMDS		0x1210
-#define   NVME_APPLE_MAX_PEND_CMDS_VAL	((64 << 16) | 64)
-#define NVME_APPLE_BOOT_STATUS		    0x1300
-#define   NVME_APPLE_BOOT_STATUS_OK		0xde71ce55
-#define NVME_APPLE_BASE_CMD_ID		    0x1308
-#define   NVME_APPLE_BASE_CMD_ID_MASK	0xffff
-#define NVME_APPLE_LINEAR_SQ_CTRL		0x24908
-#define   NVME_APPLE_LINEAR_SQ_CTRL_EN	(1 << 0)
-#define NVME_APPLE_MODESEL              0x1304
-#define NVME_APPLE_VENDOR_REG_SIZE      (0x60000)
+#define NVME_APPLE_MAX_PEND_CMDS 0x1210
+#define NVME_APPLE_MAX_PEND_CMDS_VAL ((64 << 16) | 64)
+#define NVME_APPLE_BOOT_STATUS 0x1300
+#define NVME_APPLE_BOOT_STATUS_OK 0xde71ce55
+#define NVME_APPLE_BASE_CMD_ID 0x1308
+#define NVME_APPLE_BASE_CMD_ID_MASK 0xffff
+#define NVME_APPLE_LINEAR_SQ_CTRL 0x24908
+#define NVME_APPLE_LINEAR_SQ_CTRL_EN (1 << 0)
+#define NVME_APPLE_MODESEL 0x1304
+#define NVME_APPLE_VENDOR_REG_SIZE (0x60000)
 
 typedef struct QEMU_PACKED {
     uint32_t NSID;
@@ -65,20 +72,18 @@ struct AppleANSState {
     bool started;
 };
 
-static void ascv2_core_reg_write(void *opaque, hwaddr addr,
-                  uint64_t data,
-                  unsigned size)
+static void ascv2_core_reg_write(void *opaque, hwaddr addr, uint64_t data,
+                                 unsigned size)
 {
-    DPRINTF("ANS2: AppleASCWrapV2 core reg WRITE @ 0x"
-                  HWADDR_FMT_plx " value: 0x" HWADDR_FMT_plx "\n", addr, data);
+    DPRINTF("ANS2: AppleASCWrapV2 core reg WRITE @ 0x" HWADDR_FMT_plx
+            " value: 0x" HWADDR_FMT_plx "\n",
+            addr, data);
 }
 
-static uint64_t ascv2_core_reg_read(void *opaque,
-                     hwaddr addr,
-                     unsigned size)
+static uint64_t ascv2_core_reg_read(void *opaque, hwaddr addr, unsigned size)
 {
-    DPRINTF("ANS2: AppleASCWrapV2 core reg READ @ 0x"
-                  HWADDR_FMT_plx "\n", addr);
+    DPRINTF("ANS2: AppleASCWrapV2 core reg READ @ 0x" HWADDR_FMT_plx "\n",
+            addr);
     return 0;
 }
 
@@ -93,19 +98,18 @@ static const MemoryRegionOps ascv2_core_reg_ops = {
     .valid.unaligned = false,
 };
 
-static void iop_autoboot_reg_write(void *opaque,
-                  hwaddr addr,
-                  uint64_t data,
-                  unsigned size)
+static void iop_autoboot_reg_write(void *opaque, hwaddr addr, uint64_t data,
+                                   unsigned size)
 {
-    DPRINTF("ANS2: AppleA7IOP autoboot reg WRITE @ 0x"
-                  HWADDR_FMT_plx " value: 0x" HWADDR_FMT_plx "\n", addr, data);
+    DPRINTF("ANS2: AppleA7IOP autoboot reg WRITE @ 0x" HWADDR_FMT_plx
+            " value: 0x" HWADDR_FMT_plx "\n",
+            addr, data);
 }
 
 static uint64_t iop_autoboot_reg_read(void *opaque, hwaddr addr, unsigned size)
 {
-    DPRINTF("ANS2: AppleA7IOP autoboot reg READ @ 0x"
-                  HWADDR_FMT_plx "\n", addr);
+    DPRINTF("ANS2: AppleA7IOP autoboot reg READ @ 0x" HWADDR_FMT_plx "\n",
+            addr);
     return 0;
 }
 
@@ -114,39 +118,37 @@ static const MemoryRegionOps iop_autoboot_reg_ops = {
     .read = iop_autoboot_reg_read,
 };
 
-static void apple_ans_vendor_reg_write(void *opaque, hwaddr addr,
-                                       uint64_t data,
+static void apple_ans_vendor_reg_write(void *opaque, hwaddr addr, uint64_t data,
                                        unsigned size)
 {
     AppleANSState *s = APPLE_ANS(opaque);
     uint32_t *mmio = &s->vendor_reg[addr >> 2];
-    DPRINTF("ANS2: vendor reg WRITE @ 0x"
-                  HWADDR_FMT_plx " value: 0x" HWADDR_FMT_plx "\n", addr, data);
+    DPRINTF("ANS2: vendor reg WRITE @ 0x" HWADDR_FMT_plx
+            " value: 0x" HWADDR_FMT_plx "\n",
+            addr, data);
     *mmio = data;
 }
 
-static uint64_t apple_ans_vendor_reg_read(void *opaque,
-                                          hwaddr addr,
+static uint64_t apple_ans_vendor_reg_read(void *opaque, hwaddr addr,
                                           unsigned size)
 {
     AppleANSState *s = APPLE_ANS(opaque);
     uint32_t *mmio = &s->vendor_reg[addr >> 2];
     uint32_t val = *mmio;
 
-    DPRINTF("ANS2: vendor reg READ @ 0x"
-                  HWADDR_FMT_plx "\n", addr);
+    DPRINTF("ANS2: vendor reg READ @ 0x" HWADDR_FMT_plx "\n", addr);
     switch (addr) {
-        case NVME_APPLE_MAX_PEND_CMDS:
-            val = NVME_APPLE_MAX_PEND_CMDS_VAL;
-            break;
-        case NVME_APPLE_BOOT_STATUS:
-            val = NVME_APPLE_BOOT_STATUS_OK;
-            break;
-        case NVME_APPLE_BASE_CMD_ID:
-            val = 0x6000;
-            break;
-        default:
-            break;
+    case NVME_APPLE_MAX_PEND_CMDS:
+        val = NVME_APPLE_MAX_PEND_CMDS_VAL;
+        break;
+    case NVME_APPLE_BOOT_STATUS:
+        val = NVME_APPLE_BOOT_STATUS_OK;
+        break;
+    case NVME_APPLE_BASE_CMD_ID:
+        val = 0x6000;
+        break;
+    default:
+        break;
     }
     return val;
 }
@@ -173,11 +175,9 @@ static void apple_ans_start(void *opaque)
     AppleANSState *s = APPLE_ANS(opaque);
     uint32_t config;
 
-    config = pci_default_read_config(PCI_DEVICE(&s->nvme),
-                                     PCI_COMMAND, 4);
+    config = pci_default_read_config(PCI_DEVICE(&s->nvme), PCI_COMMAND, 4);
     config |= 0x0002 | 0x0004; /* memory | bus */
-    pci_default_write_config(PCI_DEVICE(&s->nvme),
-                             PCI_COMMAND, config, 4);
+    pci_default_write_config(PCI_DEVICE(&s->nvme), PCI_COMMAND, config, 4);
     s->started = true;
     assert(PCI_DEVICE(&s->nvme)->bus_master_enable_region.enabled);
 }
@@ -194,7 +194,7 @@ static const struct AppleMboxOps ans_mailbox_ops = {
 
 SysBusDevice *apple_ans_create(DTBNode *node, uint32_t protocol_version)
 {
-    DeviceState  *dev;
+    DeviceState *dev;
     AppleANSState *s;
     PCIHostState *pci;
     SysBusDevice *sbd;
@@ -247,10 +247,10 @@ SysBusDevice *apple_ans_create(DTBNode *node, uint32_t protocol_version)
 
     object_initialize_child(OBJECT(dev), "nvme", &s->nvme, TYPE_NVME);
 
-    object_property_set_str(OBJECT(&s->nvme), "serial",
-                            "QEMUT8030ANS", &error_fatal);
-    object_property_set_bool(OBJECT(&s->nvme), "is-apple-ans",
-                             true, &error_fatal);
+    object_property_set_str(OBJECT(&s->nvme), "serial", "QEMUT8030ANS",
+                            &error_fatal);
+    object_property_set_bool(OBJECT(&s->nvme), "is-apple-ans", true,
+                             &error_fatal);
     object_property_set_uint(OBJECT(&s->nvme), "max_ioqpairs", 7, &error_fatal);
     object_property_set_uint(OBJECT(&s->nvme), "mdts", 8, &error_fatal);
     object_property_set_uint(OBJECT(&s->nvme), "logical_block_size", 4096,
@@ -306,12 +306,12 @@ static int apple_ans_post_load(void *opaque, int version_id)
 static const VMStateDescription vmstate_apple_ans = {
     .name = "apple_ans",
     .post_load = apple_ans_post_load,
-    .fields = (VMStateField[]) {
-        VMSTATE_UINT32(nvme_interrupt_idx, AppleANSState),
-        VMSTATE_BOOL(started, AppleANSState),
-
-        VMSTATE_END_OF_LIST()
-    }
+    .fields =
+        (VMStateField[]){
+            VMSTATE_UINT32(nvme_interrupt_idx, AppleANSState),
+            VMSTATE_BOOL(started, AppleANSState),
+            VMSTATE_END_OF_LIST(),
+        }
 };
 
 static void apple_ans_class_init(ObjectClass *klass, void *data)

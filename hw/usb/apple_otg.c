@@ -1,37 +1,37 @@
 #include "qemu/osdep.h"
-#include "hw/usb/apple_otg.h"
+#include "hw/arm/xnu_dtb.h"
 #include "hw/irq.h"
+#include "hw/qdev-properties.h"
+#include "hw/usb/apple_otg.h"
+#include "hw/usb/hcd-dwc2.h"
 #include "migration/vmstate.h"
+#include "qapi/error.h"
 #include "qemu/bitops.h"
+#include "qemu/error-report.h"
 #include "qemu/lockable.h"
 #include "qemu/log.h"
 #include "qemu/module.h"
 #include "qemu/timer.h"
-#include "hw/arm/xnu_dtb.h"
-#include "hw/usb/hcd-dwc2.h"
-#include "qapi/error.h"
-#include "qemu/error-report.h"
-#include "hw/qdev-properties.h"
 
-#define rAUSB_USB20PHY_CTL		(0x00)
-#define rAUSB_USB20PHY_OTGSIG	(0x04)
-#define rAUSB_USB20PHY_CFG0		(0x08)
-#define rAUSB_USB20PHY_CFG1		(0x0C)
-#define rAUSB_USB20PHY_BATCTL	(0x10)
-#define rAUSB_USB20PHY_TEST		(0x1C)
+#define rAUSB_USB20PHY_CTL (0x00)
+#define rAUSB_USB20PHY_OTGSIG (0x04)
+#define rAUSB_USB20PHY_CFG0 (0x08)
+#define rAUSB_USB20PHY_CFG1 (0x0C)
+#define rAUSB_USB20PHY_BATCTL (0x10)
+#define rAUSB_USB20PHY_TEST (0x1C)
 
-#define rAUSB_WIDGET_OTG_QOS		(0x14)
-#define rAUSB_WIDGET_OTG_CACHE		(0x18)
-#define rAUSB_WIDGET_OTG_ADDR		(0x1C)
-#define rAUSB_WIDGET_EHCI0_QOS		(0x34)
-#define rAUSB_WIDGET_EHCI0_CACHE	(0x38)
-#define rAUSB_WIDGET_EHCI0_ADDR		(0x3C)
-#define rAUSB_WIDGET_OHCI0_QOS		(0x54)
-#define rAUSB_WIDGET_OHCI0_CACHE	(0x58)
-#define rAUSB_WIDGET_OHCI0_ADDR		(0x5C)
-#define rAUSB_WIDGET_EHCI1_QOS      (0x74)
-#define rAUSB_WIDGET_EHCI1_CACHE    (0x78)
-#define rAUSB_WIDGET_EHCI1_ADDR		(0x7C)
+#define rAUSB_WIDGET_OTG_QOS (0x14)
+#define rAUSB_WIDGET_OTG_CACHE (0x18)
+#define rAUSB_WIDGET_OTG_ADDR (0x1C)
+#define rAUSB_WIDGET_EHCI0_QOS (0x34)
+#define rAUSB_WIDGET_EHCI0_CACHE (0x38)
+#define rAUSB_WIDGET_EHCI0_ADDR (0x3C)
+#define rAUSB_WIDGET_OHCI0_QOS (0x54)
+#define rAUSB_WIDGET_OHCI0_CACHE (0x58)
+#define rAUSB_WIDGET_OHCI0_ADDR (0x5C)
+#define rAUSB_WIDGET_EHCI1_QOS (0x74)
+#define rAUSB_WIDGET_EHCI1_CACHE (0x78)
+#define rAUSB_WIDGET_EHCI1_ADDR (0x7C)
 
 static void apple_otg_realize(DeviceState *dev, Error **errp)
 {
@@ -48,8 +48,8 @@ static void apple_otg_realize(DeviceState *dev, Error **errp)
         s->dart = true;
     } else {
         if (local_err) {
-            error_reportf_err(local_err, "%s: no DMA memory region found: ",
-                            __func__);
+            error_reportf_err(local_err,
+                              "%s: no DMA memory region found: ", __func__);
         }
         warn_report("%s: Redirecting all DMA accesses to 0x800000000",
                     __func__);
@@ -65,8 +65,7 @@ static void apple_otg_realize(DeviceState *dev, Error **errp)
     sysbus_realize(SYS_BUS_DEVICE(&s->dwc2), errp);
     sysbus_pass_irq(SYS_BUS_DEVICE(s), SYS_BUS_DEVICE(&s->dwc2));
 
-    object_initialize_child(OBJECT(dev), "host", &s->usbtcp,
-                            TYPE_USB_TCP_HOST);
+    object_initialize_child(OBJECT(dev), "host", &s->usbtcp, TYPE_USB_TCP_HOST);
     sysbus_realize(SYS_BUS_DEVICE(&s->usbhcd), errp);
     qdev_realize(DEVICE(s->dwc2.device), &s->usbtcp.bus.qbus, errp);
 }
@@ -78,22 +77,22 @@ static void apple_otg_reset(DeviceState *dev)
     device_cold_reset(&s->usbhcd);
 }
 
-static void phy_reg_write(void *opaque,
-                  hwaddr addr,
-                  uint64_t data,
-                  unsigned size)
+static void phy_reg_write(void *opaque, hwaddr addr, uint64_t data,
+                          unsigned size)
 {
-    qemu_log_mask(LOG_UNIMP, "OTG: phy reg WRITE @ 0x" HWADDR_FMT_plx " value: 0x" HWADDR_FMT_plx "\n", addr, data);
+    qemu_log_mask(LOG_UNIMP,
+                  "OTG: phy reg WRITE @ 0x" HWADDR_FMT_plx
+                  " value: 0x" HWADDR_FMT_plx "\n",
+                  addr, data);
 
     AppleOTGState *s = APPLE_OTG(opaque);
     memcpy(s->phy_reg + addr, &data, size);
 }
 
-static uint64_t phy_reg_read(void *opaque,
-                     hwaddr addr,
-                     unsigned size)
+static uint64_t phy_reg_read(void *opaque, hwaddr addr, unsigned size)
 {
-    qemu_log_mask(LOG_UNIMP, "OTG: phy reg READ @ 0x" HWADDR_FMT_plx "\n", addr);
+    qemu_log_mask(LOG_UNIMP, "OTG: phy reg READ @ 0x" HWADDR_FMT_plx "\n",
+                  addr);
     AppleOTGState *s = APPLE_OTG(opaque);
     uint64_t val = 0;
 
@@ -106,22 +105,22 @@ static const MemoryRegionOps phy_reg_ops = {
     .read = phy_reg_read,
 };
 
-static void usbctl_reg_write(void *opaque,
-                  hwaddr addr,
-                  uint64_t data,
-                  unsigned size)
+static void usbctl_reg_write(void *opaque, hwaddr addr, uint64_t data,
+                             unsigned size)
 {
-    qemu_log_mask(LOG_UNIMP, "OTG: usbctl reg WRITE @ 0x" HWADDR_FMT_plx " value: 0x" HWADDR_FMT_plx "\n", addr, data);
+    qemu_log_mask(LOG_UNIMP,
+                  "OTG: usbctl reg WRITE @ 0x" HWADDR_FMT_plx
+                  " value: 0x" HWADDR_FMT_plx "\n",
+                  addr, data);
     AppleOTGState *s = APPLE_OTG(opaque);
 
     memcpy(s->usbctl_reg + addr, &data, size);
 }
 
-static uint64_t usbctl_reg_read(void *opaque,
-                     hwaddr addr,
-                     unsigned size)
+static uint64_t usbctl_reg_read(void *opaque, hwaddr addr, unsigned size)
 {
-    qemu_log_mask(LOG_UNIMP, "OTG: usbctl reg READ @ 0x" HWADDR_FMT_plx "\n", addr);
+    qemu_log_mask(LOG_UNIMP, "OTG: usbctl reg READ @ 0x" HWADDR_FMT_plx "\n",
+                  addr);
     AppleOTGState *s = APPLE_OTG(opaque);
     uint64_t val = 0;
 
@@ -134,16 +133,17 @@ static const MemoryRegionOps usbctl_reg_ops = {
     .read = usbctl_reg_read,
 };
 
-static void widget_reg_write(void *opaque,
-                  hwaddr addr,
-                  uint64_t data,
-                  unsigned size)
+static void widget_reg_write(void *opaque, hwaddr addr, uint64_t data,
+                             unsigned size)
 {
     AppleOTGState *s = APPLE_OTG(opaque);
     uint32_t value = data;
     bool dma_changed = false;
 
-    qemu_log_mask(LOG_UNIMP, "OTG: widget reg WRITE @ 0x" HWADDR_FMT_plx " value: 0x" HWADDR_FMT_plx "\n", addr, data);
+    qemu_log_mask(LOG_UNIMP,
+                  "OTG: widget reg WRITE @ 0x" HWADDR_FMT_plx
+                  " value: 0x" HWADDR_FMT_plx "\n",
+                  addr, data);
     switch (addr) {
     case rAUSB_WIDGET_OTG_ADDR:
         if (value & (1 << 8)) {
@@ -164,11 +164,10 @@ static void widget_reg_write(void *opaque,
     }
 }
 
-static uint64_t widget_reg_read(void *opaque,
-                     hwaddr addr,
-                     unsigned size)
+static uint64_t widget_reg_read(void *opaque, hwaddr addr, unsigned size)
 {
-    qemu_log_mask(LOG_UNIMP, "OTG: widget reg READ @ 0x" HWADDR_FMT_plx "\n", addr);
+    qemu_log_mask(LOG_UNIMP, "OTG: widget reg READ @ 0x" HWADDR_FMT_plx "\n",
+                  addr);
     AppleOTGState *s = APPLE_OTG(opaque);
     uint64_t val = 0;
 
@@ -187,7 +186,7 @@ DeviceState *apple_otg_create(DTBNode *node)
     SysBusDevice *sbd;
     AppleOTGState *s;
     DTBNode *child;
-    DTBProp  *prop;
+    DTBProp *prop;
 
     dev = qdev_new(TYPE_APPLE_OTG);
     sbd = SYS_BUS_DEVICE(dev);
@@ -196,7 +195,8 @@ DeviceState *apple_otg_create(DTBNode *node)
     memory_region_init_io(&s->phy, OBJECT(dev), &phy_reg_ops, s,
                           TYPE_APPLE_OTG ".phy", sizeof(s->phy_reg));
     sysbus_init_mmio(sbd, &s->phy);
-    *(uint32_t*)(s->phy_reg + rAUSB_USB20PHY_OTGSIG) |= (1 << 8); //cable connected
+    *(uint32_t *)(s->phy_reg + rAUSB_USB20PHY_OTGSIG) |=
+        (1 << 8); // cable connected
     memory_region_init_io(&s->usbctl, OBJECT(dev), &usbctl_reg_ops, s,
                           TYPE_APPLE_OTG ".usbctl", sizeof(s->usbctl_reg));
     sysbus_init_mmio(sbd, &s->usbctl);
@@ -207,9 +207,10 @@ DeviceState *apple_otg_create(DTBNode *node)
     assert(prop);
 
     object_initialize_child(OBJECT(dev), "dwc2", &s->dwc2, TYPE_DWC2_USB);
-    memory_region_init_alias(&s->dwc2_mr, OBJECT(dev), TYPE_APPLE_OTG ".dwc2",
-                        sysbus_mmio_get_region(SYS_BUS_DEVICE(&s->dwc2), 0),
-                        0, ((uint64_t *)prop->value)[1]);
+    memory_region_init_alias(
+        &s->dwc2_mr, OBJECT(dev), TYPE_APPLE_OTG ".dwc2",
+        sysbus_mmio_get_region(SYS_BUS_DEVICE(&s->dwc2), 0), 0,
+        ((uint64_t *)prop->value)[1]);
     sysbus_init_mmio(sbd, &s->dwc2_mr);
 
     memory_region_init_io(&s->widget, OBJECT(dev), &widget_reg_ops, s,
@@ -235,13 +236,14 @@ static Property apple_otg_properties[] = {
 static const VMStateDescription vmstate_apple_otg = {
     .name = "apple_otg",
     .post_load = apple_otg_post_load,
-    .fields = (VMStateField[]) {
-        VMSTATE_UINT8_ARRAY(phy_reg, AppleOTGState, 0x20),
-        VMSTATE_UINT8_ARRAY(usbctl_reg, AppleOTGState, 0x1000),
-        VMSTATE_UINT8_ARRAY(widget_reg, AppleOTGState, 0x100),
-        VMSTATE_UINT64(high_addr, AppleOTGState),
-        VMSTATE_END_OF_LIST()
-    }
+    .fields =
+        (VMStateField[]){
+            VMSTATE_UINT8_ARRAY(phy_reg, AppleOTGState, 0x20),
+            VMSTATE_UINT8_ARRAY(usbctl_reg, AppleOTGState, 0x1000),
+            VMSTATE_UINT8_ARRAY(widget_reg, AppleOTGState, 0x100),
+            VMSTATE_UINT64(high_addr, AppleOTGState),
+            VMSTATE_END_OF_LIST(),
+        }
 };
 
 static void apple_otg_class_init(ObjectClass *klass, void *data)

@@ -2,16 +2,16 @@
 #define HW_SPMI_APPLE_SPMI_H
 
 #include "qemu/osdep.h"
-#include "qemu/queue.h"
-#include "hw/sysbus.h"
-#include "qom/object.h"
-#include "qemu/fifo32.h"
-#include "hw/spmi/spmi.h"
 #include "hw/arm/xnu_dtb.h"
+#include "hw/spmi/spmi.h"
+#include "hw/sysbus.h"
+#include "qemu/fifo32.h"
+#include "qemu/queue.h"
+#include "qom/object.h"
 
-#define TYPE_APPLE_SPMI     "apple.spmi"
+#define TYPE_APPLE_SPMI "apple.spmi"
 OBJECT_DECLARE_TYPE(AppleSPMIState, AppleSPMIClass, APPLE_SPMI)
-#define APPLE_SPMI_MMIO_SIZE    (0x4000)
+#define APPLE_SPMI_MMIO_SIZE (0x4000)
 
 typedef struct AppleSPMIClass {
     /*< private >*/

@@ -2,23 +2,23 @@
 #define APPLE_NVRAM_H
 
 #include "qemu/osdep.h"
-#include "qom/object.h"
-#include "qemu/queue.h"
 #include "block/block.h"
-#include "hw/block/block.h"
 #include "block/nvme.h"
+#include "hw/block/block.h"
 #include "hw/nvme/nvme.h"
 #include "hw/nvram/chrp_nvram.h"
+#include "qemu/queue.h"
+#include "qom/object.h"
 
 #define TYPE_APPLE_NVRAM "apple-nvram"
 OBJECT_DECLARE_TYPE(AppleNvramState, AppleNvramClass, APPLE_NVRAM)
 
 #pragma pack(push, 1)
 typedef struct {
-	ChrpNvramPartHdr chrp;
-	uint32_t adler;
-	uint32_t generation;
-	uint8_t padding[8];
+    ChrpNvramPartHdr chrp;
+    uint32_t adler;
+    uint32_t generation;
+    uint8_t padding[8];
 } AppleNvramPartHdr;
 #pragma pack(pop)
 
@@ -52,11 +52,11 @@ void nvram_free(NvramBank *bank);
 G_DEFINE_AUTOPTR_CLEANUP_FUNC(NvramBank, nvram_free);
 
 typedef struct AppleNvramState {
-   NvmeNamespace parent_obj;
+    NvmeNamespace parent_obj;
 
-   NvramBank *bank;
-   QTAILQ_HEAD(, env_var) env;
-   size_t len;
+    NvramBank *bank;
+    QTAILQ_HEAD(, env_var) env;
+    size_t len;
 } AppleNvramState;
 
 struct AppleNvramClass {
@@ -66,7 +66,7 @@ struct AppleNvramClass {
 
     DeviceRealize parent_realize;
     DeviceUnrealize parent_unrealize;
-    DeviceReset   parent_reset;
+    DeviceReset parent_reset;
 };
 
 NvramPartition *nvram_find_part(NvramBank *bank, const char *name);
@@ -79,7 +79,10 @@ const char *env_get(AppleNvramState *s, const char *name);
 size_t env_get_uint(AppleNvramState *s, const char *name, size_t default_val);
 bool env_get_bool(AppleNvramState *s, const char *name, bool default_val);
 int env_unset(AppleNvramState *s, const char *name);
-int env_set(AppleNvramState *s, const char *name, const char *val, uint32_t flags);
-int env_set_uint(AppleNvramState *s, const char *name, size_t val, uint32_t flags);
-int env_set_bool(AppleNvramState *s, const char *name, bool val, uint32_t flags);
+int env_set(AppleNvramState *s, const char *name, const char *val,
+            uint32_t flags);
+int env_set_uint(AppleNvramState *s, const char *name, size_t val,
+                 uint32_t flags);
+int env_set_bool(AppleNvramState *s, const char *name, bool val,
+                 uint32_t flags);
 #endif /* APPLE_NVRAM_H */

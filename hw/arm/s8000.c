@@ -24,34 +24,34 @@
  */
 
 #include "qemu/osdep.h"
-#include "qemu/log.h"
+#include "exec/address-spaces.h"
+#include "hw/arm/boot.h"
+#include "hw/misc/unimp.h"
+#include "hw/platform-bus.h"
 #include "qapi/error.h"
 #include "qemu/cutils.h"
-#include "hw/arm/boot.h"
-#include "exec/address-spaces.h"
-#include "hw/misc/unimp.h"
+#include "qemu/error-report.h"
+#include "qemu/log.h"
 #include "sysemu/block-backend.h"
-#include "sysemu/sysemu.h"
 #include "sysemu/reset.h"
 #include "sysemu/runstate.h"
-#include "qemu/error-report.h"
-#include "hw/platform-bus.h"
+#include "sysemu/sysemu.h"
 
-#include "hw/arm/s8000.h"
 #include "hw/arm/apple_a9.h"
+#include "hw/arm/s8000.h"
 
-#include "hw/irq.h"
-#include "hw/or-irq.h"
-#include "hw/intc/apple_aic.h"
+#include "hw/arm/apple_dart.h"
+#include "hw/arm/apple_sep.h"
 #include "hw/gpio/apple_gpio.h"
 #include "hw/i2c/apple_i2c.h"
-#include "hw/usb/apple_otg.h"
-#include "hw/watchdog/apple_wdt.h"
+#include "hw/intc/apple_aic.h"
+#include "hw/irq.h"
 #include "hw/misc/apple_aes.h"
 #include "hw/nvram/apple_nvram.h"
-#include "hw/arm/apple_dart.h"
+#include "hw/or-irq.h"
 #include "hw/ssi/apple_spi.h"
-#include "hw/arm/apple_sep.h"
+#include "hw/usb/apple_otg.h"
+#include "hw/watchdog/apple_wdt.h"
 
 #include "hw/arm/exynos4210.h"
 #include "hw/arm/xnu_pf.h"
@@ -62,11 +62,11 @@
 #define S8000_SRAM_SIZE (0x400000ULL)
 #define S8000_DRAM_BASE (0x800000000ULL)
 #define S8000_SPI0_BASE (0x00A080000ULL)
-#define S8000_SPI0_IRQ  (188)
+#define S8000_SPI0_IRQ (188)
 
 #define S8000_GPIO_HOLD_KEY (97)
 #define S8000_GPIO_MENU_KEY (96)
-#define S8000_GPIO_SPI0_CS  (106)
+#define S8000_GPIO_SPI0_CS (106)
 #define S8000_GPIO_FORCE_DFU (123)
 #define S8000_GPIO_DFU_STATUS (136)
 
@@ -76,14 +76,14 @@
 #define RET_INST 0xd65f03c0
 #define RETAB_INST 0xd65f0fff
 
-static void s8000_wake_up_cpus(MachineState* machine, uint64_t cpu_mask)
+static void s8000_wake_up_cpus(MachineState *machine, uint64_t cpu_mask)
 {
-    S8000MachineState* tms = S8000_MACHINE(machine);
+    S8000MachineState *tms = S8000_MACHINE(machine);
     int i;
 
-    for(i = 0; i < machine->smp.cpus; i++) {
-        if (test_bit(i, (unsigned long*)&cpu_mask)
-            && apple_a9_is_sleep(tms->cpus[i])) {
+    for (i = 0; i < machine->smp.cpus; i++) {
+        if (test_bit(i, (unsigned long *)&cpu_mask) &&
+            apple_a9_is_sleep(tms->cpus[i])) {
             apple_a9_wakeup(tms->cpus[i]);
         }
     }
@@ -93,7 +93,7 @@ static void s8000_create_s3c_uart(const S8000MachineState *tms, Chardev *chr)
 {
     DeviceState *dev;
     hwaddr base;
-    //first fetch the uart mmio address
+    // first fetch the uart mmio address
     int vector;
     DTBProp *prop;
     hwaddr *uart_offset;
@@ -104,7 +104,7 @@ static void s8000_create_s3c_uart(const S8000MachineState *tms, Chardev *chr)
     child = find_dtb_node(child, "uart0");
     assert(child != NULL);
 
-    //make sure this node has the boot-console prop
+    // make sure this node has the boot-console prop
     prop = find_dtb_prop(child, "boot-console");
     assert(prop != NULL);
 
@@ -117,14 +117,14 @@ static void s8000_create_s3c_uart(const S8000MachineState *tms, Chardev *chr)
     prop = find_dtb_prop(child, "interrupts");
     assert(prop);
 
-    vector = *(uint32_t*)prop->value;
-    dev = exynos4210_uart_create(base, 256, 0, chr, qdev_get_gpio_in(DEVICE(tms->aic), vector));
+    vector = *(uint32_t *)prop->value;
+    dev = exynos4210_uart_create(base, 256, 0, chr,
+                                 qdev_get_gpio_in(DEVICE(tms->aic), vector));
     assert(dev);
 }
 
 static void s8000_patch_kernel(struct mach_header_64 *hdr)
 {
-
 }
 
 static bool s8000_check_panic(MachineState *machine)
@@ -134,15 +134,15 @@ static bool s8000_check_panic(MachineState *machine)
         return false;
     }
     g_autofree struct xnu_embedded_panic_header *panic_info =
-                                                   g_malloc0(tms->panic_size);
+        g_malloc0(tms->panic_size);
     g_autofree void *buffer = g_malloc0(tms->panic_size);
 
     address_space_rw(&address_space_memory, tms->panic_base,
                      MEMTXATTRS_UNSPECIFIED, (uint8_t *)panic_info,
                      tms->panic_size, 0);
     address_space_rw(&address_space_memory, tms->panic_base,
-                     MEMTXATTRS_UNSPECIFIED, (uint8_t *)buffer,
-                     tms->panic_size, 1);
+                     MEMTXATTRS_UNSPECIFIED, (uint8_t *)buffer, tms->panic_size,
+                     1);
 
     return panic_info->eph_magic == EMBEDDED_PANIC_MAGIC;
 }
@@ -154,7 +154,7 @@ static void s8000_memory_setup(MachineState *machine)
     g_autofree char *securerom = NULL;
     unsigned long fsize = 0;
 
-    //setup the memory layout:
+    // setup the memory layout:
 
     if (s8000_check_panic(machine)) {
         qemu_system_guest_panicked(NULL);
@@ -174,17 +174,24 @@ static void s8000_memory_setup(MachineState *machine)
                      (uint8_t *)securerom, fsize, 1);
 }
 
-static void pmgr_unk_reg_write(void *opaque, hwaddr addr, uint64_t data, unsigned size)
+static void pmgr_unk_reg_write(void *opaque, hwaddr addr, uint64_t data,
+                               unsigned size)
 {
-    hwaddr base = (hwaddr) opaque;
-    qemu_log_mask(LOG_UNIMP, "PMGR reg WRITE unk @ 0x" TARGET_FMT_lx " base: 0x" TARGET_FMT_lx " value: 0x" TARGET_FMT_lx "\n", base + addr, base, data);
+    hwaddr base = (hwaddr)opaque;
+    qemu_log_mask(LOG_UNIMP,
+                  "PMGR reg WRITE unk @ 0x" TARGET_FMT_lx
+                  " base: 0x" TARGET_FMT_lx " value: 0x" TARGET_FMT_lx "\n",
+                  base + addr, base, data);
 }
 
 static uint64_t pmgr_unk_reg_read(void *opaque, hwaddr addr, unsigned size)
 {
-    hwaddr base = (hwaddr) opaque;
+    hwaddr base = (hwaddr)opaque;
 
-    qemu_log_mask(LOG_UNIMP, "PMGR reg READ unk @ 0x" TARGET_FMT_lx " base: 0x" TARGET_FMT_lx "\n", base + addr, base);
+    qemu_log_mask(LOG_UNIMP,
+                  "PMGR reg READ unk @ 0x" TARGET_FMT_lx
+                  " base: 0x" TARGET_FMT_lx "\n",
+                  base + addr, base);
     switch (base + addr) {
     case 0x102bc000: /* CFG_FUSE0 */
         return (1 << 2);
@@ -205,12 +212,16 @@ static const MemoryRegionOps pmgr_unk_reg_ops = {
     .read = pmgr_unk_reg_read,
 };
 
-static void pmgr_reg_write(void *opaque, hwaddr addr, uint64_t data, unsigned size)
+static void pmgr_reg_write(void *opaque, hwaddr addr, uint64_t data,
+                           unsigned size)
 {
     S8000MachineState *tms = S8000_MACHINE(opaque);
     uint32_t value = data;
 
-    qemu_log_mask(LOG_UNIMP, "PMGR reg WRITE @ 0x" TARGET_FMT_lx " value: 0x" TARGET_FMT_lx "\n", addr, data);
+    qemu_log_mask(LOG_UNIMP,
+                  "PMGR reg WRITE @ 0x" TARGET_FMT_lx " value: 0x" TARGET_FMT_lx
+                  "\n",
+                  addr, data);
 
     if (addr >= 0x80000 && addr <= 0x88010) {
         value = (value & 0xf) << 4 | (value & 0xf);
@@ -256,7 +267,7 @@ static void s8000_cpu_setup(MachineState *machine)
                             TYPE_CPU_CLUSTER);
     qdev_prop_set_uint32(DEVICE(&tms->cluster), "cluster-id", 0);
 
-    for (iter = root->child_nodes, i = 0; iter != NULL; iter = next,i++) {
+    for (iter = root->child_nodes, i = 0; iter != NULL; iter = next, i++) {
         DTBNode *node;
 
         next = iter->next;
@@ -301,21 +312,18 @@ static void s8000_create_aic(MachineState *machine)
     prop = find_dtb_prop(child, "reg");
     assert(prop != NULL);
 
-    reg = (hwaddr*)prop->value;
+    reg = (hwaddr *)prop->value;
 
-    for(i = 0; i < machine->smp.cpus; i++) {
-        memory_region_add_subregion_overlap(&tms->cpus[i]->memory,
-                                            tms->soc_base_pa + reg[0],
-                                            sysbus_mmio_get_region(tms->aic, i),
-                                                                   0);
+    for (i = 0; i < machine->smp.cpus; i++) {
+        memory_region_add_subregion_overlap(
+            &tms->cpus[i]->memory, tms->soc_base_pa + reg[0],
+            sysbus_mmio_get_region(tms->aic, i), 0);
         sysbus_connect_irq(tms->aic, i,
-                           qdev_get_gpio_in(DEVICE(tms->cpus[i]),
-                                            ARM_CPU_IRQ));
+                           qdev_get_gpio_in(DEVICE(tms->cpus[i]), ARM_CPU_IRQ));
     }
-
 }
 
-static void s8000_pmgr_setup(MachineState* machine)
+static void s8000_pmgr_setup(MachineState *machine)
 {
     uint64_t *reg;
     int i;
@@ -331,17 +339,23 @@ static void s8000_pmgr_setup(MachineState* machine)
     prop = find_dtb_prop(child, "reg");
     assert(prop);
 
-    reg = (uint64_t*)prop->value;
+    reg = (uint64_t *)prop->value;
 
-    for(i = 0; i < prop->length / 8; i+=2) {
-        MemoryRegion* mem = g_new(MemoryRegion, 1);
+    for (i = 0; i < prop->length / 8; i += 2) {
+        MemoryRegion *mem = g_new(MemoryRegion, 1);
         if (i > 0) {
             snprintf(name, 32, "pmgr-unk-reg-%d", i);
-            memory_region_init_io(mem, OBJECT(machine), &pmgr_unk_reg_ops, (void*)reg[i], name, reg[i+1]);
+            memory_region_init_io(mem, OBJECT(machine), &pmgr_unk_reg_ops,
+                                  (void *)reg[i], name, reg[i + 1]);
         } else {
-            memory_region_init_io(mem, OBJECT(machine), &pmgr_reg_ops, tms, "pmgr-reg", reg[i+1]);
+            memory_region_init_io(mem, OBJECT(machine), &pmgr_reg_ops, tms,
+                                  "pmgr-reg", reg[i + 1]);
         }
-        memory_region_add_subregion_overlap(tms->sysmem, reg[i] + reg[i+1] < tms->soc_size ? tms->soc_base_pa + reg[i] : reg[i], mem, -1);
+        memory_region_add_subregion_overlap(
+            tms->sysmem,
+            reg[i] + reg[i + 1] < tms->soc_size ? tms->soc_base_pa + reg[i] :
+                                                  reg[i],
+            mem, -1);
     }
 }
 
@@ -350,14 +364,15 @@ static void s8000_create_dart(MachineState *machine, const char *name)
     AppleDARTState *dart = NULL;
     DTBProp *prop;
     uint64_t *reg;
-    uint32_t* ints;
+    uint32_t *ints;
     int i;
     S8000MachineState *tms = S8000_MACHINE(machine);
     DTBNode *child = find_dtb_node(tms->device_tree, "arm-io");
 
     assert(child);
     child = find_dtb_node(child, name);
-    if (!child) return;
+    if (!child)
+        return;
 
     dart = apple_dart_create(child);
     assert(dart);
@@ -369,14 +384,14 @@ static void s8000_create_dart(MachineState *machine, const char *name)
     reg = (uint64_t *)prop->value;
 
     for (int i = 0; i < prop->length / 16; i++) {
-        sysbus_mmio_map(SYS_BUS_DEVICE(dart), i, tms->soc_base_pa + reg[i*2]);
+        sysbus_mmio_map(SYS_BUS_DEVICE(dart), i, tms->soc_base_pa + reg[i * 2]);
     }
 
     prop = find_dtb_prop(child, "interrupts");
     assert(prop);
-    ints = (uint32_t*)prop->value;
+    ints = (uint32_t *)prop->value;
 
-    for(i = 0; i < prop->length / sizeof(uint32_t); i++) {
+    for (i = 0; i < prop->length / sizeof(uint32_t); i++) {
         sysbus_connect_irq(SYS_BUS_DEVICE(dart), i,
                            qdev_get_gpio_in(DEVICE(tms->aic), ints[i]));
     }
@@ -402,15 +417,16 @@ static void s8000_create_gpio(MachineState *machine, const char *name)
 
     prop = find_dtb_prop(child, "reg");
     assert(prop);
-    reg = (uint64_t*)prop->value;
+    reg = (uint64_t *)prop->value;
     sysbus_mmio_map(SYS_BUS_DEVICE(gpio), 0, tms->soc_base_pa + reg[0]);
     prop = find_dtb_prop(child, "interrupts");
     assert(prop);
 
-    ints = (uint32_t*)prop->value;
+    ints = (uint32_t *)prop->value;
 
-    for(i = 0; i < prop->length / sizeof(uint32_t); i++) {
-        sysbus_connect_irq(SYS_BUS_DEVICE(gpio), i, qdev_get_gpio_in(DEVICE(tms->aic), ints[i]));
+    for (i = 0; i < prop->length / sizeof(uint32_t); i++) {
+        sysbus_connect_irq(SYS_BUS_DEVICE(gpio), i,
+                           qdev_get_gpio_in(DEVICE(tms->aic), ints[i]));
     }
 
     sysbus_realize_and_unref(SYS_BUS_DEVICE(gpio), &error_fatal);
@@ -434,14 +450,14 @@ static void s8000_create_i2c(MachineState *machine, const char *name)
 
     prop = find_dtb_prop(child, "reg");
     assert(prop);
-    reg = (uint64_t*)prop->value;
+    reg = (uint64_t *)prop->value;
     sysbus_mmio_map(i2c, 0, tms->soc_base_pa + reg[0]);
     prop = find_dtb_prop(child, "interrupts");
     assert(prop);
 
-    ints = (uint32_t*)prop->value;
+    ints = (uint32_t *)prop->value;
 
-    for(i = 0; i < prop->length / sizeof(uint32_t); i++) {
+    for (i = 0; i < prop->length / sizeof(uint32_t); i++) {
         sysbus_connect_irq(i2c, i, qdev_get_gpio_in(DEVICE(tms->aic), ints[i]));
     }
 
@@ -467,7 +483,8 @@ static void s8000_create_spi0(MachineState *machine)
     sysbus_connect_irq(SYS_BUS_DEVICE(spi), 0,
                        qdev_get_gpio_in(DEVICE(tms->aic), S8000_SPI0_IRQ));
     /* The second sysbus IRQ is the cs line */
-    gpio = DEVICE(object_property_get_link(OBJECT(machine), "gpio", &error_fatal));
+    gpio =
+        DEVICE(object_property_get_link(OBJECT(machine), "gpio", &error_fatal));
     qdev_connect_gpio_out(gpio, S8000_GPIO_SPI0_CS,
                           qdev_get_gpio_in_named(spi, SSI_GPIO_CS, 0));
 }
@@ -490,17 +507,16 @@ static void s8000_create_spi(MachineState *machine, const char *name)
 
     prop = find_dtb_prop(child, "reg");
     assert(prop);
-    reg = (uint64_t*)prop->value;
+    reg = (uint64_t *)prop->value;
     sysbus_mmio_map(SYS_BUS_DEVICE(spi), 0, tms->soc_base_pa + reg[0]);
     prop = find_dtb_prop(child, "interrupts");
     assert(prop);
 
     /* The second sysbus IRQ is the cs line */
     /* TODO: Connect this to gpio over spi_cs0? */
-    ints = (uint32_t*)prop->value;
+    ints = (uint32_t *)prop->value;
     sysbus_connect_irq(SYS_BUS_DEVICE(spi), 0,
                        qdev_get_gpio_in(DEVICE(tms->aic), ints[0]));
-
 }
 
 static void s8000_create_usb(MachineState *machine)
@@ -525,27 +541,28 @@ static void s8000_create_usb(MachineState *machine)
     prop = find_dtb_prop(phy, "reg");
     assert(prop);
     sysbus_mmio_map(SYS_BUS_DEVICE(otg), 0,
-                    tms->soc_base_pa + ((uint64_t*)prop->value)[0]);
+                    tms->soc_base_pa + ((uint64_t *)prop->value)[0]);
     sysbus_mmio_map(SYS_BUS_DEVICE(otg), 1,
-                    tms->soc_base_pa + ((uint64_t*)prop->value)[2]);
-    sysbus_mmio_map(SYS_BUS_DEVICE(otg), 2,
-                    tms->soc_base_pa
-                    + ((uint64_t*)find_dtb_prop(complex, "ranges")->value)[1]
-                    + ((uint64_t*)find_dtb_prop(device, "reg")->value)[0]);
+                    tms->soc_base_pa + ((uint64_t *)prop->value)[2]);
+    sysbus_mmio_map(
+        SYS_BUS_DEVICE(otg), 2,
+        tms->soc_base_pa +
+            ((uint64_t *)find_dtb_prop(complex, "ranges")->value)[1] +
+            ((uint64_t *)find_dtb_prop(device, "reg")->value)[0]);
 
     prop = find_dtb_prop(complex, "reg");
     if (prop) {
         sysbus_mmio_map(SYS_BUS_DEVICE(otg), 3,
-                        tms->soc_base_pa + ((uint64_t*)prop->value)[0]);
+                        tms->soc_base_pa + ((uint64_t *)prop->value)[0]);
     }
 
     sysbus_realize_and_unref(SYS_BUS_DEVICE(otg), &error_fatal);
 
     prop = find_dtb_prop(device, "interrupts");
     assert(prop);
-    sysbus_connect_irq(SYS_BUS_DEVICE(otg), 0,
-                       qdev_get_gpio_in(DEVICE(tms->aic),
-                       ((uint32_t *)prop->value)[0]));
+    sysbus_connect_irq(
+        SYS_BUS_DEVICE(otg), 0,
+        qdev_get_gpio_in(DEVICE(tms->aic), ((uint32_t *)prop->value)[0]));
 }
 
 static void s8000_create_wdt(MachineState *machine)
@@ -569,7 +586,7 @@ static void s8000_create_wdt(MachineState *machine)
     object_property_add_child(OBJECT(machine), "wdt", OBJECT(wdt));
     prop = find_dtb_prop(child, "reg");
     assert(prop);
-    reg = (uint64_t*)prop->value;
+    reg = (uint64_t *)prop->value;
 
     /*
     0: reg
@@ -580,9 +597,9 @@ static void s8000_create_wdt(MachineState *machine)
 
     prop = find_dtb_prop(child, "interrupts");
     assert(prop);
-    ints = (uint32_t*)prop->value;
+    ints = (uint32_t *)prop->value;
 
-    for(i = 0; i < prop->length / sizeof(uint32_t); i++) {
+    for (i = 0; i < prop->length / sizeof(uint32_t); i++) {
         sysbus_connect_irq(wdt, i, qdev_get_gpio_in(DEVICE(tms->aic), ints[i]));
     }
 
@@ -598,12 +615,12 @@ static void s8000_create_wdt(MachineState *machine)
     }
 
     value = 1;
-    set_dtb_prop(child, "no-pmu", 4, (uint8_t*)&value);
+    set_dtb_prop(child, "no-pmu", 4, (uint8_t *)&value);
 
     sysbus_realize_and_unref(wdt, &error_fatal);
 }
 
-static void s8000_create_aes(MachineState* machine)
+static void s8000_create_aes(MachineState *machine)
 {
     uint32_t *ints;
     DTBProp *prop;
@@ -622,7 +639,7 @@ static void s8000_create_aes(MachineState* machine)
     object_property_add_child(OBJECT(machine), "aes", OBJECT(aes));
     prop = find_dtb_prop(child, "reg");
     assert(prop);
-    reg = (uint64_t*)prop->value;
+    reg = (uint64_t *)prop->value;
 
     /*
     0: aesMemoryMap
@@ -634,16 +651,17 @@ static void s8000_create_aes(MachineState* machine)
     prop = find_dtb_prop(child, "interrupts");
     assert(prop);
     assert(prop->length == 4);
-    ints = (uint32_t*)prop->value;
+    ints = (uint32_t *)prop->value;
 
     sysbus_connect_irq(aes, 0, qdev_get_gpio_in(DEVICE(tms->aic), *ints));
 
-    assert(object_property_add_const_link(OBJECT(aes), "dma-mr", OBJECT(tms->sysmem)));
+    assert(object_property_add_const_link(OBJECT(aes), "dma-mr",
+                                          OBJECT(tms->sysmem)));
 
     sysbus_realize_and_unref(aes, &error_fatal);
 }
 
-static void s8000_create_sep(MachineState* machine)
+static void s8000_create_sep(MachineState *machine)
 {
     int i;
     uint32_t *ints;
@@ -663,7 +681,7 @@ static void s8000_create_sep(MachineState* machine)
     object_property_add_child(OBJECT(machine), "sep", OBJECT(sep));
     prop = find_dtb_prop(child, "reg");
     assert(prop);
-    reg = (uint64_t*)prop->value;
+    reg = (uint64_t *)prop->value;
 
     /*
     0: AppleA7IOP akfRegMap
@@ -672,12 +690,13 @@ static void s8000_create_sep(MachineState* machine)
 
     prop = find_dtb_prop(child, "interrupts");
     assert(prop);
-    ints = (uint32_t*)prop->value;
+    ints = (uint32_t *)prop->value;
 
-    for(i = 0; i < prop->length / sizeof(uint32_t); i++) {
+    for (i = 0; i < prop->length / sizeof(uint32_t); i++) {
         sysbus_connect_irq(sep, i, qdev_get_gpio_in(DEVICE(tms->aic), ints[i]));
     }
-    assert(object_property_add_const_link(OBJECT(sep), "dma-mr", OBJECT(tms->sysmem)));
+    assert(object_property_add_const_link(OBJECT(sep), "dma-mr",
+                                          OBJECT(tms->sysmem)));
 
     sysbus_realize_and_unref(sep, &error_fatal);
 }
@@ -691,13 +710,12 @@ static void apple_a9_reset(void *opaque)
     CPUARMState *env;
     bool found_first = false;
 
-    CPU_FOREACH(cpu) {
-        AppleA9State *tcpu = (AppleA9State *)object_dynamic_cast(OBJECT(cpu),
-                                                               TYPE_APPLE_A9);
+    CPU_FOREACH (cpu) {
+        AppleA9State *tcpu =
+            (AppleA9State *)object_dynamic_cast(OBJECT(cpu), TYPE_APPLE_A9);
         if (tcpu) {
             object_property_set_int(OBJECT(cpu), "rvbar",
-                                    tms->bootinfo.entry & ~0xfff,
-                                    &error_abort);
+                                    tms->bootinfo.entry & ~0xfff, &error_abort);
             cpu_reset(cpu);
             if (!found_first) {
                 found_first = true;
@@ -709,30 +727,31 @@ static void apple_a9_reset(void *opaque)
     }
 }
 
-static void s8000_machine_reset(MachineState* machine, ShutdownCause reason)
+static void s8000_machine_reset(MachineState *machine, ShutdownCause reason)
 {
     S8000MachineState *tms = S8000_MACHINE(machine);
     DeviceState *gpio = NULL;
 
     qemu_devices_reset(reason);
-    if (!runstate_check(RUN_STATE_RESTORE_VM)
-        && !runstate_check(RUN_STATE_PRELAUNCH)) {
-        if (!runstate_check(RUN_STATE_PAUSED)
-            || reason != SHUTDOWN_CAUSE_NONE) {
+    if (!runstate_check(RUN_STATE_RESTORE_VM) &&
+        !runstate_check(RUN_STATE_PRELAUNCH)) {
+        if (!runstate_check(RUN_STATE_PAUSED) ||
+            reason != SHUTDOWN_CAUSE_NONE) {
             s8000_memory_setup(MACHINE(tms));
         }
     }
     apple_a9_reset(tms);
 
-    gpio = DEVICE(object_property_get_link(OBJECT(machine), "gpio", &error_fatal));
+    gpio =
+        DEVICE(object_property_get_link(OBJECT(machine), "gpio", &error_fatal));
 
     qemu_set_irq(qdev_get_gpio_in(gpio, S8000_GPIO_FORCE_DFU), tms->force_dfu);
 }
 
 static void s8000_machine_init_done(Notifier *notifier, void *data)
 {
-    S8000MachineState *tms = container_of(notifier, S8000MachineState,
-                                          init_done_notifier);
+    S8000MachineState *tms =
+        container_of(notifier, S8000MachineState, init_done_notifier);
     s8000_memory_setup(MACHINE(tms));
     apple_a9_reset(tms);
 }
@@ -796,8 +815,7 @@ static void s8000_set_force_dfu(Object *obj, const char *value, Error **errp)
 {
     S8000MachineState *tms = S8000_MACHINE(obj);
 
-    if (!strcmp(value, "true")
-        || strtoul(value, NULL, 0)) {
+    if (!strcmp(value, "true") || strtoul(value, NULL, 0)) {
         tms->force_dfu = true;
     } else {
         tms->force_dfu = false;
@@ -828,8 +846,7 @@ static void s8000_machine_class_init(ObjectClass *klass, void *data)
     mc->default_cpu_type = TYPE_APPLE_A9;
     mc->minimum_page_bits = 14;
 
-    object_class_property_add_str(klass, "force-dfu",
-                                  s8000_get_force_dfu,
+    object_class_property_add_str(klass, "force-dfu", s8000_get_force_dfu,
                                   s8000_set_force_dfu);
     object_class_property_set_description(klass, "force-dfu",
                                           "Set FORCE_DFU pin state");

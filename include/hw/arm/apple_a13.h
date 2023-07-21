@@ -2,11 +2,11 @@
 #define HW_ARM_APPLE_A13_H
 
 #include "qemu/osdep.h"
-#include "cpu.h"
 #include "exec/hwaddr.h"
-#include "qemu/queue.h"
 #include "hw/arm/xnu_dtb.h"
 #include "hw/cpu/cluster.h"
+#include "qemu/queue.h"
+#include "cpu.h"
 
 #define A13_MAX_CPU 6
 #define A13_MAX_CLUSTER 2
@@ -31,7 +31,7 @@ typedef struct AppleA13Class {
 
     DeviceRealize parent_realize;
     DeviceUnrealize parent_unrealize;
-    DeviceReset   parent_reset;
+    DeviceReset parent_reset;
 } AppleA13Class;
 
 typedef struct AppleA13State {

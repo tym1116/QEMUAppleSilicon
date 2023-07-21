@@ -1,13 +1,12 @@
 #include "qemu/osdep.h"
+#include <zlib.h>
+#include "hw/nvram/apple_nvram.h"
+#include "libdecnumber/decNumberLocal.h"
 #include "qapi/error.h"
 #include "qemu/error-report.h"
 #include "sysemu/block-backend.h"
-#include "hw/nvram/apple_nvram.h"
-#include <zlib.h>
-#include "libdecnumber/decNumberLocal.h"
 
-static inline uint8_t
-chrp_checksum(ChrpNvramPartHdr *header)
+static inline uint8_t chrp_checksum(ChrpNvramPartHdr *header)
 {
     unsigned int i, sum;
     uint8_t *tmpptr;
@@ -25,7 +24,7 @@ chrp_checksum(ChrpNvramPartHdr *header)
 static env_var *find_env(AppleNvramState *s, const char *name)
 {
     env_var *v;
-    QTAILQ_FOREACH(v, &s->env, entry) {
+    QTAILQ_FOREACH (v, &s->env, entry) {
         if (!strcmp(v->name, name)) {
             return v;
         }
@@ -139,8 +138,7 @@ int env_set_uint(AppleNvramState *s, const char *name, size_t val,
     return env_set(s, name, buf, flags);
 }
 
-int env_set_bool(AppleNvramState *s, const char *name, bool val,
-                 uint32_t flags)
+int env_set_bool(AppleNvramState *s, const char *name, bool val, uint32_t flags)
 {
     return env_set(s, name, val ? "true" : "false", flags);
 }
@@ -155,13 +153,13 @@ static ssize_t env_serialize(AppleNvramState *s, uint8_t *buffer, size_t len)
         return -1;
     }
 
-    QTAILQ_FOREACH(v, &s->env, entry) {
-       snprintf(buf + pos, len - pos, "%s=%s", v->name, v->str);
-       pos += strlen(buf + pos) + 1;
+    QTAILQ_FOREACH (v, &s->env, entry) {
+        snprintf(buf + pos, len - pos, "%s=%s", v->name, v->str);
+        pos += strlen(buf + pos) + 1;
 
-       if (pos >= len) {
+        if (pos >= len) {
             return -1;
-       }
+        }
     }
     memcpy(buffer, buf, len);
     return pos;
@@ -171,7 +169,7 @@ NvramPartition *nvram_find_part(NvramBank *bank, const char *name)
 {
     NvramPartition *part;
 
-    QTAILQ_FOREACH(part, &bank->parts, entry) {
+    QTAILQ_FOREACH (part, &bank->parts, entry) {
         if (!strcmp(part->name, name)) {
             return part;
         }
@@ -233,14 +231,17 @@ NvramBank *nvram_parse(void *buf, size_t len)
     bank->len = len;
 
     if (hdr->chrp.checksum != chrp_checksum(&hdr->chrp)) {
-        error_report("nvram partition failed checksum: expected: 0x%x, got 0x%x", hdr->chrp.checksum, chrp_checksum(&hdr->chrp));
+        error_report(
+            "nvram partition failed checksum: expected: 0x%x, got 0x%x",
+            hdr->chrp.checksum, chrp_checksum(&hdr->chrp));
         return bank;
     }
 
     uint32_t adler = adler32(1, buf + 0x14, len - 0x14);
 
     if (adler != hdr->adler) {
-        error_report("nvram bank fails adler32: expected: 0x%x, got 0x%x", hdr->adler, adler);
+        error_report("nvram bank fails adler32: expected: 0x%x, got 0x%x",
+                     hdr->adler, adler);
         return bank;
     }
     nvram_parse_partitions(bank, buf);
@@ -266,7 +267,7 @@ static int nvram_prepare_bank(NvramBank *bank, void **buffer, size_t *len)
     apple_hdr->generation = 0;
 
     offset = 0x20;
-    QTAILQ_FOREACH(part, &bank->parts, entry) {
+    QTAILQ_FOREACH (part, &bank->parts, entry) {
         if (part->len == 0) {
             error_report("%s: empty partition", __func__);
             continue;
@@ -499,8 +500,10 @@ static void apple_nvram_class_init(ObjectClass *klass, void *data)
 
     set_bit(DEVICE_CATEGORY_STORAGE, dc->categories);
 
-    device_class_set_parent_realize(dc, apple_nvram_realize, &anc->parent_realize);
-    device_class_set_parent_unrealize(dc, apple_nvram_unrealize, &anc->parent_unrealize);
+    device_class_set_parent_realize(dc, apple_nvram_realize,
+                                    &anc->parent_realize);
+    device_class_set_parent_unrealize(dc, apple_nvram_unrealize,
+                                      &anc->parent_unrealize);
     dc->desc = "Apple NVRAM";
 }
 
@@ -523,4 +526,3 @@ static void apple_nvram_register_types(void)
 }
 
 type_init(apple_nvram_register_types)
-

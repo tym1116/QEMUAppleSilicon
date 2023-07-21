@@ -1,4 +1,5 @@
 #include "qemu/osdep.h"
+#include "hw/arm/xnu_dtb.h"
 #include "hw/i2c/apple_i2c.h"
 #include "hw/i2c/i2c.h"
 #include "hw/irq.h"
@@ -8,90 +9,89 @@
 #include "qemu/log.h"
 #include "qemu/module.h"
 #include "qemu/timer.h"
-#include "hw/arm/xnu_dtb.h"
 
-//#define DEBUG_APPLE_I2C
+// #define DEBUG_APPLE_I2C
 
-#define MMIO_SIZE   (0x10000)
+#define MMIO_SIZE (0x10000)
 
-#define rMTXFIFO    0x00
-#define rMRXFIFO	0x04
-#define rMCNT		0x08
-#define rXFSTA		0x0C
-#define rSMSTA		0x14
-#define rIMASK		0x18
-#define rCTL		0x1C
-#define rVERSION	0x28
-#define rRDCOUNT    0x2C
-#define rFILTER		0x38
+#define rMTXFIFO 0x00
+#define rMRXFIFO 0x04
+#define rMCNT 0x08
+#define rXFSTA 0x0C
+#define rSMSTA 0x14
+#define rIMASK 0x18
+#define rCTL 0x1C
+#define rVERSION 0x28
+#define rRDCOUNT 0x2C
+#define rFILTER 0x38
 
-#define kMTXFIFOWrite		(0 << 10)
-#define kMTXFIFORead		(1 << 10)
-#define kMTXFIFOStop		(1 << 9)
-#define kMTXFIFOStart		(1 << 8)
-#define kMTXFIFOData(_v)	(((_v) >> 0) & 0xff)
+#define kMTXFIFOWrite (0 << 10)
+#define kMTXFIFORead (1 << 10)
+#define kMTXFIFOStop (1 << 9)
+#define kMTXFIFOStart (1 << 8)
+#define kMTXFIFOData(_v) (((_v) >> 0) & 0xff)
 
-#define kMRXFIFOEmpty		(1 << 8)
-#define kMRXFIFOData(_d)	(((_d) & 0xff) << 0)
+#define kMRXFIFOEmpty (1 << 8)
+#define kMRXFIFOData(_d) (((_d)&0xff) << 0)
 
-#define kMCNTRxCnt(_v)		(((_v) & 0xff) << 8)
-#define kMCNTTxCnt(_v)		(((_v) & 0xff) << 0)
+#define kMCNTRxCnt(_v) (((_v)&0xff) << 8)
+#define kMCNTTxCnt(_v) (((_v)&0xff) << 0)
 
-#define kXFSTAmst(_v)		(((_v) >> 28) & 0xf)
-#define kIDLE	0
-#define kXFSTAxfifo(_v)		(((_v) >> 21) & 0x3)
-#define kXFSTAxcnt(_v)		(((_v) >> 0) & 0xfffff)
+#define kXFSTAmst(_v) (((_v) >> 28) & 0xf)
+#define kIDLE 0
+#define kXFSTAxfifo(_v) (((_v) >> 21) & 0x3)
+#define kXFSTAxcnt(_v) (((_v) >> 0) & 0xfffff)
 
 /* Transaction in progress */
-#define kSMSTAxip			(1 << 28)
+#define kSMSTAxip (1 << 28)
 
 /* Transaction ended */
-#define kSMSTAxen			(1 << 27)
+#define kSMSTAxen (1 << 27)
 
 /* Unjam failed */
-#define kSMSTAujf			(1 << 26)
-#define kSMSTAjmd			(1 << 25)
+#define kSMSTAujf (1 << 26)
+#define kSMSTAjmd (1 << 25)
 
 /* Bus jammed */
-#define kSMSTAjam			(1 << 24)
+#define kSMSTAjam (1 << 24)
 
 /* IO error */
-#define kSMSTAmto			(1 << 23)
+#define kSMSTAmto (1 << 23)
 
 /* NAK */
-#define kSMSTAmtn			(1 << 21)
+#define kSMSTAmtn (1 << 21)
 
 /* RX full */
-#define kSMSTAmrf			(1 << 20)
+#define kSMSTAmrf (1 << 20)
 /* RX not empty */
-#define kSMSTAmrne			(1 << 19)
+#define kSMSTAmrne (1 << 19)
 
-#define kSMSTAmtr			(1 << 18)
+#define kSMSTAmtr (1 << 18)
 
 /* TX full */
-#define kSMSTAmtf			(1 << 17)
+#define kSMSTAmtf (1 << 17)
 /* Tx empty */
-#define kSMSTAmte			(1 << 16)
+#define kSMSTAmte (1 << 16)
 
 /* timeout error */
-#define kSMSTAtom			(1 << 6)
+#define kSMSTAtom (1 << 6)
 
 /* reset RX */
-#define kCTLMRR			    (1 << 10)
+#define kCTLMRR (1 << 10)
 
 /* reset TX */
-#define kCTLMTR			    (1 << 9)
+#define kCTLMTR (1 << 9)
 
 /* unjam */
-#define kCTLUJM			    (1 << 8)
+#define kCTLUJM (1 << 8)
 
-#define kCTLCLK(_c)		    (((_c) & 0xff) << 0)
+#define kCTLCLK(_c) (((_c)&0xff) << 0)
 
-#define kMIXDIV			    4
+#define kMIXDIV 4
 
-#define kRDCOUNT(_v)        (((_v) >> 8) & 0xff)
+#define kRDCOUNT(_v) (((_v) >> 8) & 0xff)
 
-#define REG(_s,_x) *(uint32_t *)&_s->reg[_x]
+#define REG(_s, _x) *(uint32_t *)&_s->reg[_x]
 
 static void apple_i2c_update_irq(AppleI2CState *s)
 {
@@ -107,17 +107,17 @@ static void apple_i2c_update_irq(AppleI2CState *s)
     }
 }
 
-static void apple_i2c_reg_write(void *opaque,
-                  hwaddr addr,
-                  uint64_t data,
-                  unsigned size)
+static void apple_i2c_reg_write(void *opaque, hwaddr addr, uint64_t data,
+                                unsigned size)
 {
     AppleI2CState *s = APPLE_I2C(opaque);
     DeviceState *dev = DEVICE(opaque);
-    #ifdef DEBUG_APPLE_I2C
-    qemu_log_mask(LOG_UNIMP, "%s: reg WRITE @ 0x" HWADDR_FMT_plx
-                             " value: 0x" HWADDR_FMT_plx "\n", dev->id, addr, data);
-    #endif
+#ifdef DEBUG_APPLE_I2C
+    qemu_log_mask(LOG_UNIMP,
+                  "%s: reg WRITE @ 0x" HWADDR_FMT_plx
+                  " value: 0x" HWADDR_FMT_plx "\n",
+                  dev->id, addr, data);
+#endif
 
     uint32_t *mmio = (uint32_t *)&s->reg[addr];
     uint32_t value = data;
@@ -129,15 +129,14 @@ static void apple_i2c_reg_write(void *opaque,
         uint8_t addr = kMTXFIFOData(value) >> 1;
         iflg = true;
         if ((value & kMTXFIFOStart)) {
-
             if (kMTXFIFOData(value) & 1) {
                 s->is_recv = true;
             } else {
                 s->is_recv = false;
             }
             if (i2c_start_transfer(s->bus, addr, s->is_recv) != 0) {
-                qemu_log_mask(LOG_GUEST_ERROR,
-                              "%s: can't find device @ 0x%x\n", dev->id, addr);
+                qemu_log_mask(LOG_GUEST_ERROR, "%s: can't find device @ 0x%x\n",
+                              dev->id, addr);
                 REG(s, rSMSTA) |= kSMSTAmtn;
                 break;
             }
@@ -209,9 +208,7 @@ static void apple_i2c_reg_write(void *opaque,
     }
 }
 
-static uint64_t apple_i2c_reg_read(void *opaque,
-                     hwaddr addr,
-                     unsigned size)
+static uint64_t apple_i2c_reg_read(void *opaque, hwaddr addr, unsigned size)
 {
     AppleI2CState *s = APPLE_I2C(opaque);
     uint32_t *mmio = (uint32_t *)&s->reg[addr];
@@ -236,10 +233,11 @@ static uint64_t apple_i2c_reg_read(void *opaque,
         break;
     }
 
-    #ifdef DEBUG_APPLE_I2C
-    qemu_log_mask(LOG_UNIMP, "%s: reg READ @ 0x" HWADDR_FMT_plx
-                             " value: 0x%x\n", DEVICE(s)->id, addr, value);
-    #endif
+#ifdef DEBUG_APPLE_I2C
+    qemu_log_mask(LOG_UNIMP,
+                  "%s: reg READ @ 0x" HWADDR_FMT_plx " value: 0x%x\n",
+                  DEVICE(s)->id, addr, value);
+#endif
     return value;
 }
 
@@ -299,8 +297,8 @@ SysBusDevice *apple_i2c_create(const char *name)
     dev->id = g_strdup(name);
     snprintf(bus_name, sizeof(bus_name), "%s.bus", name);
     s->bus = i2c_init_bus(dev, bus_name);
-    memory_region_init_io(&s->iomem, OBJECT(dev),
-                          &i2c_reg_ops, s, dev->id, MMIO_SIZE);
+    memory_region_init_io(&s->iomem, OBJECT(dev), &i2c_reg_ops, s, dev->id,
+                          MMIO_SIZE);
     sysbus_init_mmio(sbd, &s->iomem);
     sysbus_init_irq(sbd, &s->irq);
 
@@ -317,15 +315,16 @@ static const VMStateDescription vmstate_apple_i2c = {
     .name = "apple_i2c",
     .version_id = 1,
     .minimum_version_id = 1,
-    .fields = (VMStateField[]) {
-        VMSTATE_UINT8_ARRAY(reg, AppleI2CState, APPLE_I2C_MMIO_SIZE),
-        VMSTATE_FIFO8(rx_fifo, AppleI2CState),
-        VMSTATE_BOOL(last_irq, AppleI2CState),
-        VMSTATE_BOOL(nak, AppleI2CState),
-        VMSTATE_BOOL(xip, AppleI2CState),
-        VMSTATE_BOOL(is_recv, AppleI2CState),
-        VMSTATE_END_OF_LIST()
-    }
+    .fields =
+        (VMStateField[]){
+            VMSTATE_UINT8_ARRAY(reg, AppleI2CState, APPLE_I2C_MMIO_SIZE),
+            VMSTATE_FIFO8(rx_fifo, AppleI2CState),
+            VMSTATE_BOOL(last_irq, AppleI2CState),
+            VMSTATE_BOOL(nak, AppleI2CState),
+            VMSTATE_BOOL(xip, AppleI2CState),
+            VMSTATE_BOOL(is_recv, AppleI2CState),
+            VMSTATE_END_OF_LIST(),
+        }
 };
 
 static void apple_i2c_class_init(ObjectClass *klass, void *data)
@@ -338,8 +337,7 @@ static void apple_i2c_class_init(ObjectClass *klass, void *data)
     dc->vmsd = &vmstate_apple_i2c;
     resettable_class_set_parent_phases(rc, apple_i2c_reset_enter,
                                        apple_i2c_reset_hold,
-                                       apple_i2c_reset_exit,
-                                       &c->parent_phases);
+                                       apple_i2c_reset_exit, &c->parent_phases);
 }
 
 static const TypeInfo apple_i2c_type_info = {
