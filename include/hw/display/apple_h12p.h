@@ -61,6 +61,8 @@ struct GenPipeState {
 typedef struct GenPipeState GenPipeState;
 
 #define H12P_GENPIPE_BASE_FOR(i) (H12P_GENPIPE_BASE + i * H12P_GENPIPE_REG_SIZE)
+#define H12P_GENPIPE_END_FOR(i) \
+    H12P_GENPIPE_BASE_FOR(i) + H12P_GENPIPE_REG_SIZE - 1
 
 struct AppleH12PState {
     /*< private >*/

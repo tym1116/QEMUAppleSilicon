@@ -79,7 +79,7 @@ static const char *KEEP_COMP[] = {
     "atc-phy,t8030\0atc-phy,t8027\0$",
     "usb-drd,t8030\0usb-drd,t8027\0$",
     "disp0,t8030\0$",
-    "roswell\0$",
+    // "roswell\0$",
 };
 
 static const char *REM_NAMES[] = {

@@ -25,69 +25,70 @@
 #include "migration/vmstate.h"
 #include "qapi/error.h"
 #include "qemu/error-report.h"
+#include "qemu/log.h"
 #include "qom/object.h"
 #include "ui/console.h"
 #include "ui/pixel_ops.h"
 #include "framebuffer.h"
 
-static bool h12p_genpipe_write(GenPipeState *s, hwaddr addr, uint64_t data)
+// #define DEBUG_H12P
+
+static void h12p_genpipe_write(GenPipeState *s, hwaddr addr, uint64_t data)
 {
-    if (addr < H12P_GENPIPE_BASE_FOR(s->index)) {
-        return false;
-    }
     switch (addr - H12P_GENPIPE_BASE_FOR(s->index)) {
     case H12P_GP_CONFIG_CONTROL:
         s->config_control = (uint32_t)data;
-        return true;
+        break;
     case H12P_GENPIPE_PLANE_START:
         s->plane_start = (uint32_t)data;
+#ifdef DEBUG_H12P
         info_report("[H12P] GenPipe %zu: Plane Start <- 0x" HWADDR_FMT_plx,
                     s->index, data);
-        return true;
+#endif
+        break;
     case H12P_GENPIPE_PLANE_END:
         s->plane_end = (uint32_t)data;
+#ifdef DEBUG_H12P
         info_report("[H12P] GenPipe %zu: Plane End <- 0x" HWADDR_FMT_plx,
                     s->index, data);
-        return true;
+#endif
+        break;
     case H12P_GENPIPE_PLANE_STRIDE:
         s->plane_stride = (uint32_t)data;
+#ifdef DEBUG_H12P
         info_report("[H12P] GenPipe %zu: Plane Stride <- 0x" HWADDR_FMT_plx,
                     s->index, data);
-        return true;
+#endif
+        break;
     default:
         break;
     }
-    return false;
 }
 
-static bool h12p_genpipe_read(GenPipeState *s, hwaddr addr, uint64_t *data)
+static uint32_t h12p_genpipe_read(GenPipeState *s, hwaddr addr)
 {
-    if (addr < H12P_GENPIPE_BASE_FOR(s->index)) {
-        return false;
-    }
     switch (addr - H12P_GENPIPE_BASE_FOR(s->index)) {
     case H12P_GP_CONFIG_CONTROL:
-        *data = s->config_control;
-        return true;
+        return s->config_control;
+
     case H12P_GENPIPE_PLANE_START:
-        *data = s->plane_start;
-        return true;
+        return s->plane_start;
+
     case H12P_GENPIPE_PLANE_END:
-        *data = s->plane_end;
-        return true;
+        return s->plane_end;
+
     case H12P_GENPIPE_PLANE_STRIDE:
-        *data = s->plane_stride;
-        return true;
+        return s->plane_stride;
+
     case H12P_GENPIPE_PIXEL_FORMAT:
-        *data = GENPIPE_DFB_PIXEL_FORMAT_BGRA;
-        return true;
+        return GENPIPE_DFB_PIXEL_FORMAT_BGRA;
+
     case H12P_GENPIPE_FRAME_SIZE:
-        *data = (s->width << 16) | s->height;
-        return true;
+        return (s->width << 16) | s->height;
+
     default:
-        break;
+        return 0;
     }
-    return false;
 }
 
 static uint8_t *h12p_genpipe_read_fb(GenPipeState *s, AddressSpace *dma_as,
@@ -125,28 +126,28 @@ static void h12p_up_write(void *opaque, hwaddr addr, uint64_t data,
     if (addr >= 0x200000) {
         addr -= 0x200000;
     }
-    if (h12p_genpipe_write(&s->genpipe0, addr, data)) {
-        info_report("[H12P] GenPipe 0: 0x" HWADDR_FMT_plx
-                    " <- 0x" HWADDR_FMT_plx,
-                    addr, data);
-        return;
-    }
-    if (h12p_genpipe_write(&s->genpipe1, addr, data)) {
-        info_report("[H12P] GenPipe 1: 0x" HWADDR_FMT_plx
-                    " <- 0x" HWADDR_FMT_plx,
-                    addr, data);
-        return;
-    }
-    info_report("[H12P] 0x" HWADDR_FMT_plx " <- 0x" HWADDR_FMT_plx, addr, data);
     switch (addr) {
+    case H12P_GENPIPE_BASE_FOR(0)... H12P_GENPIPE_END_FOR(0):
+        h12p_genpipe_write(&s->genpipe0, addr, data);
+        break;
+
+    case H12P_GENPIPE_BASE_FOR(1)... H12P_GENPIPE_END_FOR(1):
+        h12p_genpipe_write(&s->genpipe1, addr, data);
+        break;
+
     case H12P_UPPIPE_INT_FILTER:
         s->uppipe_int_filter &= ~(uint32_t)data;
         s->frame_processed = false;
+        qemu_irq_lower(s->irqs[0]);
         break;
-    case H12P_PCC_SOFT_RESET:
-        info_report("[H12P] PCC SOFT RESET!");
-        break;
+
     default:
+#ifdef DEBUG_H12P
+        qemu_log_mask(LOG_UNIMP,
+                      "disp0: unknown write @ 0x" HWADDR_FMT_plx
+                      " value: 0x" HWADDR_FMT_plx "\n",
+                      addr, data);
+#endif
         break;
     }
 }
@@ -157,35 +158,29 @@ static uint64_t h12p_up_read(void *opaque, hwaddr addr, unsigned size)
     if (addr >= 0x200000) {
         addr -= 0x200000;
     }
-    uint64_t ret = 0;
-    if (h12p_genpipe_read(&s->genpipe0, addr, &ret)) {
-        info_report("[H12P] GenPipe 0: 0x" HWADDR_FMT_plx
-                    " -> 0x" HWADDR_FMT_plx,
-                    addr, ret);
-        return ret;
-    }
-    if (h12p_genpipe_read(&s->genpipe1, addr, &ret)) {
-        info_report("[H12P] GenPipe 1: 0x" HWADDR_FMT_plx
-                    " -> 0x" HWADDR_FMT_plx,
-                    addr, ret);
-        return ret;
-    }
     switch (addr) {
+    case H12P_GENPIPE_BASE_FOR(0)... H12P_GENPIPE_END_FOR(0):
+        return h12p_genpipe_read(&s->genpipe0, addr);
+
+    case H12P_GENPIPE_BASE_FOR(1)... H12P_GENPIPE_END_FOR(1):
+        return h12p_genpipe_read(&s->genpipe1, addr);
+
     case H12P_UPPIPE_VER:
-        ret = UPPIPE_VER_A1;
-        break;
+        return UPPIPE_VER_A1;
+
     case H12P_UPPIPE_FRAME_SIZE:
-        ret = (s->width << 16) | s->height;
-        break;
+        return (s->width << 16) | s->height;
+
     case H12P_UPPIPE_INT_FILTER:
-        ret = s->uppipe_int_filter;
-        qemu_irq_lower(s->irqs[0]);
-        break;
+        return s->uppipe_int_filter;
+
     default:
-        break;
+#ifdef DEBUG_H12P
+        qemu_log_mask(LOG_UNIMP, "disp0: unknown read @ 0x" HWADDR_FMT_plx "\n",
+                      addr);
+#endif
+        return 0;
     }
-    info_report("[H12P] 0x" HWADDR_FMT_plx " -> 0x" HWADDR_FMT_plx, addr, ret);
-    return ret;
 }
 
 static const MemoryRegionOps h12p_up_ops = {
