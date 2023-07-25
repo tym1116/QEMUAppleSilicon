@@ -1122,8 +1122,6 @@ static void t8030_create_i2c(MachineState *machine, const char *name)
     SysBusDevice *i2c = NULL;
     DTBProp *prop;
     uint64_t *reg;
-    uint32_t *ints;
-    int i;
     T8030MachineState *tms = T8030_MACHINE(machine);
     DTBNode *child = find_dtb_node(tms->device_tree, "arm-io");
 
@@ -1141,11 +1139,8 @@ static void t8030_create_i2c(MachineState *machine, const char *name)
     prop = find_dtb_prop(child, "interrupts");
     assert(prop);
 
-    ints = (uint32_t *)prop->value;
-
-    for (i = 0; i < prop->length / sizeof(uint32_t); i++) {
-        sysbus_connect_irq(i2c, i, qdev_get_gpio_in(DEVICE(tms->aic), ints[i]));
-    }
+    sysbus_connect_irq(
+        i2c, 0, qdev_get_gpio_in(DEVICE(tms->aic), *(uint32_t *)prop->value));
 
     sysbus_realize_and_unref(i2c, &error_fatal);
 }

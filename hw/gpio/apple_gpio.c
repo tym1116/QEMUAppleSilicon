@@ -106,8 +106,14 @@ static void apple_gpio_update_pincfg(AppleGPIOState *s, int pin, uint32_t value)
 
     if (value & FUNC_MASK) {
         // TODO: Is this how FUNC_ALT0 supposed to behave?
+        // Visual: Not sure, but here's some more logic :^)
         switch (value & FUNC_MASK) {
         case FUNC_ALT0:
+            if ((value & CFG_MASK) == CFG_GP_OUT) {
+                s->gpio_cfg[pin] &= ~DATA_1;
+            } else {
+                s->gpio_cfg[pin] |= DATA_1;
+            }
             qemu_set_irq(s->out[pin], 1);
             break;
 
