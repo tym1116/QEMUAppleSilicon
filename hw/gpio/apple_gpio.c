@@ -112,7 +112,7 @@ static void apple_gpio_update_pincfg(AppleGPIOState *s, int pin, uint32_t value)
             break;
 
         default:
-            qemu_log_mask(LOG_UNIMP, "%s: set pin %u to unknown func %u",
+            qemu_log_mask(LOG_UNIMP, "%s: set pin %u to unknown func %u\n",
                           __func__, pin, value & FUNC_MASK);
             break;
         }
@@ -306,7 +306,7 @@ static void apple_gpio_reg_write(void *opaque, hwaddr addr, uint64_t data,
     case rGPIOCFG(0)... rGPIOCFG(GPIO_MAX_PIN_NR - 1):
         if ((data & FUNC_MASK) > FUNC_ALT0) {
             qemu_log_mask(LOG_UNIMP,
-                          "%s: alternate function " HWADDR_FMT_plx
+                          "%s: alternate function 0x" HWADDR_FMT_plx
                           " is not supported\n",
                           __func__, ((data & FUNC_MASK) >> FUNC_SHIFT) - 1);
         }

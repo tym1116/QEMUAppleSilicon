@@ -18,12 +18,11 @@ OBJECT_DECLARE_SIMPLE_TYPE(AppleSMCState, APPLE_SMC_IOP)
 // #define DEBUG_SMC
 
 #ifdef DEBUG_SMC
-#define SMC_LOG_MSG(ep, msg)                               \
-    do {                                                   \
-        qemu_log_mask(LOG_GUEST_ERROR,                     \
-                      "SMC: message:"                      \
-                      " ep=%u msg=0x" HWADDR_FMT_plx "\n", \
-                      ep, msg);                            \
+#define SMC_LOG_MSG(ep, msg)                                                \
+    do {                                                                    \
+        qemu_log_mask(LOG_GUEST_ERROR,                                      \
+                      "SMC: message: ep=%u msg=0x" HWADDR_FMT_plx "\n", ep, \
+                      msg);                                                 \
     } while (0)
 #else
 #define SMC_LOG_MSG(ep, msg) \

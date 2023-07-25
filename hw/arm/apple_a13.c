@@ -335,9 +335,8 @@ static void apple_a13_ipi_rr_local(CPUARMState *env, const ARMCPRegInfo *ri,
 
     if (cpu_id == -1 || c->cpus[cpu_id] == NULL) {
         qemu_log_mask(LOG_GUEST_ERROR,
-                      "CPU %x failed to send fast IPI "
-                      "to local CPU %x: "
-                      "value: 0x" HWADDR_FMT_plx "\n",
+                      "CPU %x failed to send fast IPI to local CPU %x: value: "
+                      "0x" HWADDR_FMT_plx "\n",
                       tcpu->phys_id, phys_id, value);
         return;
     }
@@ -395,9 +394,8 @@ static void apple_a13_ipi_rr_global(CPUARMState *env, const ARMCPRegInfo *ri,
 
     if (cpu_id == -1 || c->cpus[cpu_id] == NULL) {
         qemu_log_mask(LOG_GUEST_ERROR,
-                      "CPU %x failed to send fast IPI "
-                      "to global CPU %x: "
-                      "value: 0x" HWADDR_FMT_plx "\n",
+                      "CPU %x failed to send fast IPI to global CPU %x: value: "
+                      "0x" HWADDR_FMT_plx "\n",
                       tcpu->phys_id, phys_id, value);
         return;
     }

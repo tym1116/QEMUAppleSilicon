@@ -8,22 +8,21 @@
 #include "qemu/main-loop.h"
 #include "trace.h"
 
-#define IOP_LOG_MSG(s, msg)                                            \
-    do {                                                               \
-        qemu_log_mask(LOG_GUEST_ERROR,                                 \
-                      "%s: message:"                                   \
-                      " type=0x%x ep=%u QWORD0=0x" HWADDR_FMT_plx      \
-                      " QWORD1=0x" HWADDR_FMT_plx " ep0_state=0x%x\n", \
-                      s->role, msg->mgmt_msg.type, msg->endpoint,      \
-                      msg->data[0], msg->data[1], s->ep0_status);      \
+#define IOP_LOG_MSG(s, msg)                                                   \
+    do {                                                                      \
+        qemu_log_mask(LOG_GUEST_ERROR,                                        \
+                      "%s: message: type=0x%x ep=%u QWORD0=0x" HWADDR_FMT_plx \
+                      " QWORD1=0x" HWADDR_FMT_plx " ep0_state=0x%x\n",        \
+                      s->role, msg->mgmt_msg.type, msg->endpoint,             \
+                      msg->data[0], msg->data[1], s->ep0_status);             \
     } while (0)
 
-#define IOP_LOG_MGMT_MSG(s, msg)                                            \
-    do {                                                                    \
-        qemu_log_mask(LOG_GUEST_ERROR,                                      \
-                      "%s: message:"                                        \
-                      " ep=0 QWORD0=0x" HWADDR_FMT_plx " ep0_state=0x%x\n", \
-                      s->role, msg->raw, s->ep0_status);                    \
+#define IOP_LOG_MGMT_MSG(s, msg)                                   \
+    do {                                                           \
+        qemu_log_mask(LOG_GUEST_ERROR,                             \
+                      "%s: message: ep=0 QWORD0=0x" HWADDR_FMT_plx \
+                      " ep0_state=0x%x\n",                         \
+                      s->role, msg->raw, s->ep0_status);           \
     } while (0)
 
 /*

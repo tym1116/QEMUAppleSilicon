@@ -17,12 +17,11 @@
 // #define DEBUG_SIO
 
 #ifdef DEBUG_SIO
-#define SIO_LOG_MSG(ep, msg)                               \
-    do {                                                   \
-        qemu_log_mask(LOG_GUEST_ERROR,                     \
-                      "SIO: message:"                      \
-                      " ep=%u msg=0x" HWADDR_FMT_plx "\n", \
-                      ep, msg);                            \
+#define SIO_LOG_MSG(ep, msg)                                                \
+    do {                                                                    \
+        qemu_log_mask(LOG_GUEST_ERROR,                                      \
+                      "SIO: message: ep=%u msg=0x" HWADDR_FMT_plx "\n", ep, \
+                      msg);                                                 \
     } while (0)
 #else
 #define SIO_LOG_MSG(ep, msg) \

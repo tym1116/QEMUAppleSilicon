@@ -391,7 +391,7 @@ static void aes_reg_write(void *opaque, hwaddr addr, uint64_t data,
     bool nowrite = false;
 
     if (addr >= AES_BLK_REG_SIZE) {
-        qemu_log_mask(LOG_GUEST_ERROR, "%s: Bad offset 0x%" HWADDR_PRIx "\n",
+        qemu_log_mask(LOG_GUEST_ERROR, "%s: Bad offset 0x" HWADDR_FMT_plx "\n",
                       __func__, addr);
         return;
     }
@@ -530,7 +530,7 @@ static void aes_reg_write(void *opaque, hwaddr addr, uint64_t data,
         break;
     default:
         qemu_log_mask(LOG_GUEST_ERROR,
-                      "%s: write to unknown reg: 0x%" HWADDR_PRIx "\n",
+                      "%s: write to unknown reg: 0x" HWADDR_FMT_plx "\n",
                       __func__, addr);
         break;
     }
@@ -552,7 +552,7 @@ static uint64_t aes_reg_read(void *opaque, hwaddr addr, unsigned size)
     uint32_t *mmio = NULL;
 
     if (addr >= AES_BLK_REG_SIZE) {
-        qemu_log_mask(LOG_GUEST_ERROR, "%s: Bad offset 0x%" HWADDR_PRIx "\n",
+        qemu_log_mask(LOG_GUEST_ERROR, "%s: Bad offset 0x" HWADDR_FMT_plx "\n",
                       __func__, addr);
         return 0;
     }

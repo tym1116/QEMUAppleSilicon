@@ -32,12 +32,11 @@
 #define TYPE_APPLE_ANS "apple.ans"
 OBJECT_DECLARE_SIMPLE_TYPE(AppleANSState, APPLE_ANS)
 
-#define ANS_LOG_MSG(ep, msg)                          \
-    do {                                              \
-        qemu_log_mask(LOG_GUEST_ERROR,                \
-                      "ANS2: message:"                \
-                      " ep=%u msg=0x" HWADDR_FMT_plx, \
-                      ep, msg);                       \
+#define ANS_LOG_MSG(ep, msg)                                                 \
+    do {                                                                     \
+        qemu_log_mask(LOG_GUEST_ERROR,                                       \
+                      "ANS2: message: ep=%u msg=0x" HWADDR_FMT_plx "\n", ep, \
+                      msg);                                                  \
     } while (0)
 
 #define NVME_APPLE_MAX_PEND_CMDS 0x1210
