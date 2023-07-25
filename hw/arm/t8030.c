@@ -27,6 +27,7 @@
 #include "qemu/osdep.h"
 #include "exec/address-spaces.h"
 #include "hw/arm/boot.h"
+#include "hw/misc/apple_roswell.h"
 #include "hw/misc/unimp.h"
 #include "hw/platform-bus.h"
 #include "qapi/error.h"
@@ -1841,6 +1842,8 @@ static void t8030_machine_init(MachineState *machine)
     for (int i = 0; i < T8030_NUM_SPIS; i++) {
         t8030_create_spi(machine, i);
     }
+
+    apple_roswell_create(machine);
 
     apple_h12p_create(machine);
 

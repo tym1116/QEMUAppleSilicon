@@ -130,7 +130,8 @@ softmmu_ss.add(when: 'CONFIG_GRLIB', if_true: files('grlib_ahb_apb_pnp.c'))
 softmmu_ss.add(when: 'CONFIG_APPLE_SOC', if_true: files(
     'apple_aes.c',
     'apple_mbox.c',
-    'apple_smc.c'))
+    'apple_smc.c',
+    'apple_roswell.c'))
 softmmu_ss.add(when: 'CONFIG_APPLE_SPMI_PMU', if_true: files('apple_spmi_pmu.c'))
 
 softmmu_ss.add(when: 'CONFIG_I2C', if_true: files('i2c-echo.c'))
