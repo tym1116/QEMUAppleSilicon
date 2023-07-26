@@ -1671,6 +1671,21 @@ static void t8030_machine_init_done(Notifier *notifier, void *data)
     t8030_cpu_reset(tms);
 }
 
+static void t8030_roswell_create(MachineState *machine)
+{
+    T8030MachineState *tms = T8030_MACHINE(machine);
+    DTBNode *child = find_dtb_node(tms->device_tree, "arm-io");
+    assert(child);
+    child = find_dtb_node(child, "i2c3");
+    assert(child);
+    child = find_dtb_node(child, "roswell");
+    assert(child);
+
+    DTBProp *prop = find_dtb_prop(child, "reg");
+    assert(prop);
+    apple_roswell_create(machine, *(uint32_t *)prop->value);
+}
+
 static void t8030_machine_init(MachineState *machine)
 {
     T8030MachineState *tms = T8030_MACHINE(machine);
@@ -1846,7 +1861,7 @@ static void t8030_machine_init(MachineState *machine)
         t8030_create_spi(machine, i);
     }
 
-    apple_roswell_create(machine);
+    t8030_roswell_create(machine);
 
     apple_h12p_create(machine);
 

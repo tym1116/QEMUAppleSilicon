@@ -34,6 +34,6 @@ struct AppleRoswellState {
     /*< public >*/
 };
 
-void apple_roswell_create(MachineState *machine);
+void apple_roswell_create(MachineState *machine, uint8_t addr);
 
 #endif

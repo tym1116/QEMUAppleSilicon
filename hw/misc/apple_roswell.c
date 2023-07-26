@@ -29,25 +29,11 @@ static uint8_t apple_roswell_rx(I2CSlave *i2c)
     return 0x00;
 }
 
-static int apple_roswell_tx(I2CSlave *i2c, uint8_t data)
-{
-    return 0;
-}
-
-static int apple_roswell_event(I2CSlave *i2c, enum i2c_event event)
-{
-    return 0;
-}
-
-void apple_roswell_create(MachineState *machine)
+void apple_roswell_create(MachineState *machine, uint8_t addr)
 {
     AppleI2CState *i2c = APPLE_I2C(
         object_property_get_link(OBJECT(machine), "i2c3", &error_fatal));
-    i2c_slave_create_simple(i2c->bus, TYPE_APPLE_ROSWELL, 0x10);
-}
-
-static void apple_roswell_realize(DeviceState *dev, Error **errp)
-{
+    i2c_slave_create_simple(i2c->bus, TYPE_APPLE_ROSWELL, addr);
 }
 
 static void apple_roswell_class_init(ObjectClass *oc, void *data)
@@ -58,10 +44,7 @@ static void apple_roswell_class_init(ObjectClass *oc, void *data)
     dc->desc = "Apple Roswell";
     set_bit(DEVICE_CATEGORY_MISC, dc->categories);
 
-    dc->realize = apple_roswell_realize;
-    c->event = apple_roswell_event;
     c->recv = apple_roswell_rx;
-    c->send = apple_roswell_tx;
 }
 
 static const TypeInfo apple_roswell_type_info = {
