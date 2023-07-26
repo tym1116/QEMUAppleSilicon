@@ -1,5 +1,5 @@
 /*
- * Apple H12P Display Controller.
+ * Apple Display Pipe V2 Controller.
  *
  * Copyright (c) 2023 Visual Ehrmanntraut.
  *
@@ -20,7 +20,7 @@
 #include "qemu/osdep.h"
 #include "hw/arm/apple_dart.h"
 #include "hw/arm/t8030.h"
-#include "hw/display/apple_h12p.h"
+#include "hw/display/apple_displaypipe_v2.h"
 #include "hw/qdev-properties.h"
 #include "migration/vmstate.h"
 #include "qapi/error.h"
@@ -31,33 +31,33 @@
 #include "ui/pixel_ops.h"
 #include "framebuffer.h"
 
-// #define DEBUG_H12P
+// #define DEBUG_DISPLAYPIPE_V2
 
-static void h12p_genpipe_write(GenPipeState *s, hwaddr addr, uint64_t data)
+static void apple_genpipev2_write(GenPipeState *s, hwaddr addr, uint64_t data)
 {
-    switch (addr - H12P_GENPIPE_BASE_FOR(s->index)) {
-    case H12P_GP_CONFIG_CONTROL:
+    switch (addr - GENPIPEV2_BASE_FOR(s->index)) {
+    case GENPIPEV2_GP_CONFIG_CONTROL:
         s->config_control = (uint32_t)data;
         break;
-    case H12P_GENPIPE_PLANE_START:
+    case GENPIPEV2_PLANE_START:
         s->plane_start = (uint32_t)data;
-#ifdef DEBUG_H12P
-        info_report("[H12P] GenPipe %zu: Plane Start <- 0x" HWADDR_FMT_plx,
-                    s->index, data);
+#ifdef DEBUG_DISPLAYPIPE_V2
+        info_report("GenPipe %zu: Plane Start <- 0x" HWADDR_FMT_plx, s->index,
+                    data);
 #endif
         break;
-    case H12P_GENPIPE_PLANE_END:
+    case GENPIPEV2_PLANE_END:
         s->plane_end = (uint32_t)data;
-#ifdef DEBUG_H12P
-        info_report("[H12P] GenPipe %zu: Plane End <- 0x" HWADDR_FMT_plx,
-                    s->index, data);
+#ifdef DEBUG_DISPLAYPIPE_V2
+        info_report("GenPipe %zu: Plane End <- 0x" HWADDR_FMT_plx, s->index,
+                    data);
 #endif
         break;
-    case H12P_GENPIPE_PLANE_STRIDE:
+    case GENPIPEV2_PLANE_STRIDE:
         s->plane_stride = (uint32_t)data;
-#ifdef DEBUG_H12P
-        info_report("[H12P] GenPipe %zu: Plane Stride <- 0x" HWADDR_FMT_plx,
-                    s->index, data);
+#ifdef DEBUG_DISPLAYPIPE_V2
+        info_report("GenPipe %zu: Plane Stride <- 0x" HWADDR_FMT_plx, s->index,
+                    data);
 #endif
         break;
     default:
@@ -65,25 +65,25 @@ static void h12p_genpipe_write(GenPipeState *s, hwaddr addr, uint64_t data)
     }
 }
 
-static uint32_t h12p_genpipe_read(GenPipeState *s, hwaddr addr)
+static uint32_t apple_genpipev2_read(GenPipeState *s, hwaddr addr)
 {
-    switch (addr - H12P_GENPIPE_BASE_FOR(s->index)) {
-    case H12P_GP_CONFIG_CONTROL:
+    switch (addr - GENPIPEV2_BASE_FOR(s->index)) {
+    case GENPIPEV2_GP_CONFIG_CONTROL:
         return s->config_control;
 
-    case H12P_GENPIPE_PLANE_START:
+    case GENPIPEV2_PLANE_START:
         return s->plane_start;
 
-    case H12P_GENPIPE_PLANE_END:
+    case GENPIPEV2_PLANE_END:
         return s->plane_end;
 
-    case H12P_GENPIPE_PLANE_STRIDE:
+    case GENPIPEV2_PLANE_STRIDE:
         return s->plane_stride;
 
-    case H12P_GENPIPE_PIXEL_FORMAT:
-        return GENPIPE_DFB_PIXEL_FORMAT_BGRA;
+    case GENPIPEV2_PIXEL_FORMAT:
+        return GENPIPEV2_DFB_PIXEL_FORMAT_BGRA;
 
-    case H12P_GENPIPE_FRAME_SIZE:
+    case GENPIPEV2_FRAME_SIZE:
         return (s->width << 16) | s->height;
 
     default:
@@ -91,8 +91,8 @@ static uint32_t h12p_genpipe_read(GenPipeState *s, hwaddr addr)
     }
 }
 
-static uint8_t *h12p_genpipe_read_fb(GenPipeState *s, AddressSpace *dma_as,
-                                     uint32_t plane_stride, size_t *size_out)
+static uint8_t *apple_genpipev2_read_fb(GenPipeState *s, AddressSpace *dma_as,
+                                        uint32_t plane_stride, size_t *size_out)
 {
     if (s->plane_start && s->plane_end && s->plane_stride && plane_stride) {
         size_t size = s->plane_end - s->plane_start;
@@ -107,85 +107,86 @@ static uint8_t *h12p_genpipe_read_fb(GenPipeState *s, AddressSpace *dma_as,
     return NULL;
 }
 
-static bool h12p_genpipe_init(GenPipeState *s, size_t index, uint32_t width,
-                              uint32_t height)
+static bool apple_genpipev2_init(GenPipeState *s, size_t index, uint32_t width,
+                                 uint32_t height)
 {
     memset(s, 0, sizeof(*s));
     s->index = index;
     s->width = width;
     s->height = height;
-    s->config_control = GP_CONFIG_CONTROL_ENABLED;
+    s->config_control = GENPIPEV2_GP_CONFIG_CONTROL_ENABLED;
     return true;
 }
 
 
-static void h12p_up_write(void *opaque, hwaddr addr, uint64_t data,
-                          unsigned size)
+static void apple_displaypipe_v2_write(void *opaque, hwaddr addr, uint64_t data,
+                                       unsigned size)
 {
-    AppleH12PState *s = APPLE_H12P(opaque);
+    AppleDisplayPipeV2State *s = APPLE_DISPLAYPIPE_V2(opaque);
     if (addr >= 0x200000) {
         addr -= 0x200000;
     }
     switch (addr) {
-    case H12P_GENPIPE_BASE_FOR(0)... H12P_GENPIPE_END_FOR(0):
-        h12p_genpipe_write(&s->genpipe0, addr, data);
+    case GENPIPEV2_BASE_FOR(0)... GENPIPEV2_END_FOR(0):
+        apple_genpipev2_write(&s->genpipe0, addr, data);
         break;
 
-    case H12P_GENPIPE_BASE_FOR(1)... H12P_GENPIPE_END_FOR(1):
-        h12p_genpipe_write(&s->genpipe1, addr, data);
+    case GENPIPEV2_BASE_FOR(1)... GENPIPEV2_END_FOR(1):
+        apple_genpipev2_write(&s->genpipe1, addr, data);
         break;
 
-    case H12P_UPPIPE_INT_FILTER:
+    case UPPIPEV2_INT_FILTER:
         s->uppipe_int_filter &= ~(uint32_t)data;
         s->frame_processed = false;
         qemu_irq_lower(s->irqs[0]);
         break;
 
     default:
-#ifdef DEBUG_H12P
+#ifdef DEBUG_DISPLAYPIPE_V2
         qemu_log_mask(LOG_UNIMP,
-                      "disp0: unknown write @ 0x" HWADDR_FMT_plx
+                      "%s: unknown write @ 0x" HWADDR_FMT_plx
                       " value: 0x" HWADDR_FMT_plx "\n",
-                      addr, data);
+                      s->id, addr, data);
 #endif
         break;
     }
 }
 
-static uint64_t h12p_up_read(void *opaque, hwaddr addr, unsigned size)
+static uint64_t apple_displaypipe_v2_read(void *opaque, hwaddr addr,
+                                          unsigned size)
 {
-    AppleH12PState *s = APPLE_H12P(opaque);
+    AppleDisplayPipeV2State *s = APPLE_DISPLAYPIPE_V2(opaque);
     if (addr >= 0x200000) {
         addr -= 0x200000;
     }
     switch (addr) {
-    case H12P_GENPIPE_BASE_FOR(0)... H12P_GENPIPE_END_FOR(0):
-        return h12p_genpipe_read(&s->genpipe0, addr);
+    case GENPIPEV2_BASE_FOR(0)... GENPIPEV2_END_FOR(0):
+        return apple_genpipev2_read(&s->genpipe0, addr);
 
-    case H12P_GENPIPE_BASE_FOR(1)... H12P_GENPIPE_END_FOR(1):
-        return h12p_genpipe_read(&s->genpipe1, addr);
+    case GENPIPEV2_BASE_FOR(1)... GENPIPEV2_END_FOR(1):
+        return apple_genpipev2_read(&s->genpipe1, addr);
 
-    case H12P_UPPIPE_VER:
-        return UPPIPE_VER_A1;
+    case UPPIPEV2_VER:
+        return UPPIPEV2_VER_A1;
 
-    case H12P_UPPIPE_FRAME_SIZE:
+    case UPPIPEV2_FRAME_SIZE:
         return (s->width << 16) | s->height;
 
-    case H12P_UPPIPE_INT_FILTER:
+    case UPPIPEV2_INT_FILTER:
         return s->uppipe_int_filter;
 
     default:
-#ifdef DEBUG_H12P
-        qemu_log_mask(LOG_UNIMP, "disp0: unknown read @ 0x" HWADDR_FMT_plx "\n",
-                      addr);
+#ifdef DEBUG_DISPLAYPIPE_V2
+        qemu_log_mask(LOG_UNIMP, "%s: unknown read @ 0x" HWADDR_FMT_plx "\n",
+                      s->id, addr);
 #endif
         return 0;
     }
 }
 
-static const MemoryRegionOps h12p_up_ops = {
-    .write = h12p_up_write,
-    .read = h12p_up_read,
+static const MemoryRegionOps apple_displaypipe_v2_reg_ops = {
+    .write = apple_displaypipe_v2_write,
+    .read = apple_displaypipe_v2_read,
     .endianness = DEVICE_NATIVE_ENDIAN,
     .impl.min_access_size = 4,
     .impl.max_access_size = 4,
@@ -194,18 +195,19 @@ static const MemoryRegionOps h12p_up_ops = {
     .valid.unaligned = false,
 };
 
-void apple_h12p_create(MachineState *machine)
+void apple_displaypipe_v2_create(MachineState *machine, const char *name)
 {
     T8030MachineState *tms = T8030_MACHINE(machine);
-    DeviceState *dev = qdev_new(TYPE_APPLE_H12P);
+    DeviceState *dev = qdev_new(TYPE_APPLE_DISPLAYPIPE_V2);
     SysBusDevice *sbd = SYS_BUS_DEVICE(dev);
-    AppleH12PState *s = APPLE_H12P(sbd);
+    AppleDisplayPipeV2State *s = APPLE_DISPLAYPIPE_V2(sbd);
     tms->video.v_baseAddr = T8030_DISPLAY_BASE;
     tms->video.v_rowBytes = s->width * 4;
     tms->video.v_width = s->width;
     tms->video.v_height = s->height;
     tms->video.v_depth = 32 | ((2 - 1) << 16);
     tms->video.v_display = 1;
+    s->id = name;
 
     if (xnu_contains_boot_arg(machine->kernel_cmdline, "-s", false) ||
         xnu_contains_boot_arg(machine->kernel_cmdline, "-v", false)) {
@@ -214,7 +216,7 @@ void apple_h12p_create(MachineState *machine)
 
     DTBNode *armio = find_dtb_node(tms->device_tree, "arm-io");
     assert(armio);
-    DTBNode *child = find_dtb_node(armio, "disp0");
+    DTBNode *child = find_dtb_node(armio, name);
     assert(child);
     assert(set_dtb_prop(child, "display-target", 15, "DisplayTarget5"));
     uint32_t dispTimingInfo[] = { 0x33C, 0x90, 0x1, 0x1, 0x700, 0x1, 0x1, 0x1 };
@@ -229,8 +231,9 @@ void apple_h12p_create(MachineState *machine)
     DTBProp *prop = find_dtb_prop(child, "reg");
     assert(prop);
     uint64_t *reg = (uint64_t *)prop->value;
-    memory_region_init_io(&s->up_regs, OBJECT(sbd), &h12p_up_ops, sbd,
-                          "up.regs", reg[1]);
+    memory_region_init_io(&s->up_regs, OBJECT(sbd),
+                          &apple_displaypipe_v2_reg_ops, sbd, "up.regs",
+                          reg[1]);
     sysbus_init_mmio(sbd, &s->up_regs);
     sysbus_mmio_map(sbd, 0, tms->soc_base_pa + reg[0]);
     object_property_add_const_link(OBJECT(sbd), "up.regs", OBJECT(&s->up_regs));
@@ -244,12 +247,14 @@ void apple_h12p_create(MachineState *machine)
         sysbus_connect_irq(sbd, i, qdev_get_gpio_in(DEVICE(tms->aic), ints[i]));
     }
 
+    g_autofree char *dart_name = g_strdup_printf("dart-%s", name);
     AppleDARTState *dart = APPLE_DART(
-        object_property_get_link(OBJECT(machine), "dart-disp0", &error_fatal));
+        object_property_get_link(OBJECT(machine), dart_name, &error_fatal));
     assert(dart);
-    child = find_dtb_node(armio, "dart-disp0");
+    child = find_dtb_node(armio, dart_name);
     assert(child);
-    child = find_dtb_node(child, "mapper-disp0");
+    g_autofree char *mapper_name = g_strdup_printf("mapper-%s", name);
+    child = find_dtb_node(child, mapper_name);
     assert(child);
     prop = find_dtb_prop(child, "reg");
     assert(prop);
@@ -258,20 +263,22 @@ void apple_h12p_create(MachineState *machine)
     assert(s->dma_mr);
     assert(object_property_add_const_link(OBJECT(sbd), "dma_mr",
                                           OBJECT(s->dma_mr)));
-    address_space_init(&s->dma_as, s->dma_mr, "disp0.dma");
+    g_autofree char *dma_name = g_strdup_printf("%s.dma", name);
+    address_space_init(&s->dma_as, s->dma_mr, dma_name);
 
     memory_region_init_ram(&s->vram, OBJECT(sbd), "vram", T8030_DISPLAY_SIZE,
                            &error_fatal);
     memory_region_add_subregion_overlap(tms->sysmem, tms->video.v_baseAddr,
                                         &s->vram, 1);
     object_property_add_const_link(OBJECT(sbd), "vram", OBJECT(&s->vram));
-    object_property_add_child(OBJECT(machine), "disp0", OBJECT(sbd));
+    object_property_add_child(OBJECT(machine), name, OBJECT(sbd));
 
     sysbus_realize_and_unref(sbd, &error_fatal);
 }
 
-static void h12p_draw_row(void *opaque, uint8_t *dest, const uint8_t *src,
-                          int width, int dest_pitch)
+static void apple_displaypipe_v2_draw_row(void *opaque, uint8_t *dest,
+                                          const uint8_t *src, int width,
+                                          int dest_pitch)
 {
     while (width--) {
         /* Load using endian-safe loads */
@@ -286,9 +293,9 @@ static void h12p_draw_row(void *opaque, uint8_t *dest, const uint8_t *src,
     }
 }
 
-static void h12p_gfx_update(void *opaque)
+static void apple_displaypipe_v2_gfx_update(void *opaque)
 {
-    AppleH12PState *s = APPLE_H12P(opaque);
+    AppleDisplayPipeV2State *s = APPLE_DISPLAYPIPE_V2(opaque);
     DisplaySurface *surface = qemu_console_surface(s->console);
 
     int stride = s->width * sizeof(uint32_t);
@@ -300,9 +307,9 @@ static void h12p_gfx_update(void *opaque)
             framebuffer_update_memory_section(&s->vram_section, &s->vram, 0,
                                               s->height, stride);
         }
-        framebuffer_update_display(surface, &s->vram_section, s->width,
-                                   s->height, stride, stride, 0, 0,
-                                   h12p_draw_row, s, &first, &last);
+        framebuffer_update_display(
+            surface, &s->vram_section, s->width, s->height, stride, stride, 0,
+            0, apple_displaypipe_v2_draw_row, s, &first, &last);
         if (first >= 0) {
             dpy_gfx_update(s->console, 0, first, s->width, last - first + 1);
         }
@@ -312,20 +319,20 @@ static void h12p_gfx_update(void *opaque)
 
     if (!s->frame_processed) {
         size_t size0 = 0;
-        g_autofree uint8_t *buf0 = h12p_genpipe_read_fb(
+        g_autofree uint8_t *buf0 = apple_genpipev2_read_fb(
             &s->genpipe0, &s->dma_as, s->genpipe0.plane_stride, &size0);
         size_t size1 = 0;
-        g_autofree uint8_t *buf1 = h12p_genpipe_read_fb(
+        g_autofree uint8_t *buf1 = apple_genpipev2_read_fb(
             &s->genpipe1, &s->dma_as, s->genpipe0.plane_stride, &size1);
 
         uint8_t *dest = surface_data(surface);
         for (size_t i = 0; i < s->height; i++) {
             if (size0 && buf0 != NULL)
-                h12p_draw_row(s, dest + i * stride, buf0 + i * stride, s->width,
-                              0);
+                apple_displaypipe_v2_draw_row(s, dest + i * stride,
+                                              buf0 + i * stride, s->width, 0);
             if (size1 && buf1 != NULL)
-                h12p_draw_row(s, dest + i * stride, buf1 + i * stride, s->width,
-                              0);
+                apple_displaypipe_v2_draw_row(s, dest + i * stride,
+                                              buf1 + i * stride, s->width, 0);
         }
 
         dpy_gfx_update_full(s->console);
@@ -335,64 +342,64 @@ static void h12p_gfx_update(void *opaque)
     }
 }
 
-static const GraphicHwOps apple_h12p_ops = {
-    .gfx_update = h12p_gfx_update,
+static const GraphicHwOps apple_displaypipe_v2_ops = {
+    .gfx_update = apple_displaypipe_v2_gfx_update,
 };
 
-static void apple_h12p_realize(DeviceState *dev, Error **errp)
+static void apple_displaypipe_v2_realize(DeviceState *dev, Error **errp)
 {
-    AppleH12PState *s = APPLE_H12P(dev);
+    AppleDisplayPipeV2State *s = APPLE_DISPLAYPIPE_V2(dev);
 
     s->uppipe_int_filter = 0;
     s->frame_processed = false;
-    h12p_genpipe_init(&s->genpipe0, 0, s->width, s->height);
-    h12p_genpipe_init(&s->genpipe1, 1, s->width, s->height);
-    s->console = graphic_console_init(dev, 0, &apple_h12p_ops, s);
+    apple_genpipev2_init(&s->genpipe0, 0, s->width, s->height);
+    apple_genpipev2_init(&s->genpipe1, 1, s->width, s->height);
+    s->console = graphic_console_init(dev, 0, &apple_displaypipe_v2_ops, s);
     qemu_console_resize(s->console, s->width, s->height);
 }
 
-static const VMStateDescription vmstate_apple_h12p = {
-    .name = TYPE_APPLE_H12P,
+static const VMStateDescription vmstate_apple_displaypipe_v2 = {
+    .name = TYPE_APPLE_DISPLAYPIPE_V2,
     .version_id = 1,
     .minimum_version_id = 1,
     .fields =
         (VMStateField[]){
-            VMSTATE_UINT32(width, AppleH12PState),
-            VMSTATE_UINT32(height, AppleH12PState),
+            VMSTATE_UINT32(width, AppleDisplayPipeV2State),
+            VMSTATE_UINT32(height, AppleDisplayPipeV2State),
             VMSTATE_END_OF_LIST(),
         },
 };
 
-static Property apple_h12p_props[] = {
+static Property apple_displaypipe_v2_props[] = {
     // iPhone 4/4S
-    DEFINE_PROP_UINT32("width", AppleH12PState, width, 640),
-    DEFINE_PROP_UINT32("height", AppleH12PState, height, 960),
+    DEFINE_PROP_UINT32("width", AppleDisplayPipeV2State, width, 640),
+    DEFINE_PROP_UINT32("height", AppleDisplayPipeV2State, height, 960),
     // iPhone 11
-    // DEFINE_PROP_UINT32("width", AppleH12PState, width, 828),
-    // DEFINE_PROP_UINT32("height", AppleH12PState, height, 1792),
+    // DEFINE_PROP_UINT32("width", AppleDisplayPipeV2State, width, 828),
+    // DEFINE_PROP_UINT32("height", AppleDisplayPipeV2State, height, 1792),
     DEFINE_PROP_END_OF_LIST()
 };
 
-static void apple_h12p_class_init(ObjectClass *oc, void *data)
+static void apple_displaypipe_v2_class_init(ObjectClass *oc, void *data)
 {
     DeviceClass *dc = DEVICE_CLASS(oc);
 
     set_bit(DEVICE_CATEGORY_DISPLAY, dc->categories);
-    device_class_set_props(dc, apple_h12p_props);
-    dc->realize = apple_h12p_realize;
-    dc->vmsd = &vmstate_apple_h12p;
+    device_class_set_props(dc, apple_displaypipe_v2_props);
+    dc->realize = apple_displaypipe_v2_realize;
+    dc->vmsd = &vmstate_apple_displaypipe_v2;
 }
 
-static const TypeInfo apple_h12p_type_info = {
-    .name = TYPE_APPLE_H12P,
+static const TypeInfo apple_displaypipe_v2_type_info = {
+    .name = TYPE_APPLE_DISPLAYPIPE_V2,
     .parent = TYPE_SYS_BUS_DEVICE,
-    .instance_size = sizeof(AppleH12PState),
-    .class_init = apple_h12p_class_init,
+    .instance_size = sizeof(AppleDisplayPipeV2State),
+    .class_init = apple_displaypipe_v2_class_init,
 };
 
-static void apple_h12p_register_types(void)
+static void apple_displaypipe_v2_register_types(void)
 {
-    type_register_static(&apple_h12p_type_info);
+    type_register_static(&apple_displaypipe_v2_type_info);
 }
 
-type_init(apple_h12p_register_types);
+type_init(apple_displaypipe_v2_register_types);

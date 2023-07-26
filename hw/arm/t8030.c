@@ -69,7 +69,7 @@
 #include "hw/watchdog/apple_wdt.h"
 
 #include "hw/arm/xnu_pf.h"
-#include "hw/display/apple_h12p.h"
+#include "hw/display/apple_displaypipe_v2.h"
 
 #define T8030_DRAM_BASE (0x800000000)
 #define T8030_DRAM_SIZE (4 * GiB)
@@ -1863,7 +1863,7 @@ static void t8030_machine_init(MachineState *machine)
 
     t8030_roswell_create(machine);
 
-    apple_h12p_create(machine);
+    apple_displaypipe_v2_create(machine, "disp0");
 
     tms->init_done_notifier.notify = t8030_machine_init_done;
     qemu_add_machine_init_done_notifier(&tms->init_done_notifier);

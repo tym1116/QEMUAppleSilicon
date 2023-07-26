@@ -1,5 +1,5 @@
 /*
- * Apple H12P Display Controller.
+ * Apple Display Pipe V2 Controller.
  *
  * Copyright (c) 2023 Visual Ehrmanntraut.
  *
@@ -16,8 +16,8 @@
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library; if not, see <http://www.gnu.org/licenses/>.
  */
-#ifndef HW_FB_APPLE_H12P_H
-#define HW_FB_APPLE_H12P_H
+#ifndef APPLE_DISPLAYPIPE_V2_H
+#define APPLE_DISPLAYPIPE_V2_H
 
 #include "qemu/osdep.h"
 #include "hw/irq.h"
@@ -27,30 +27,28 @@
 #include "sysemu/dma.h"
 #include "ui/console.h"
 
-#define T8030_DISPLAY_BASE (0x8F7FB4000)
+#define T8030_DISPLAY_BASE 0x8F7FB4000
 #define T8030_DISPLAY_SIZE (67 * 1024 * 1024)
 
-#define TYPE_APPLE_H12P "apple-h12p"
-OBJECT_DECLARE_SIMPLE_TYPE(AppleH12PState, APPLE_H12P);
+#define TYPE_APPLE_DISPLAYPIPE_V2 "apple-displaypipe-v2"
+OBJECT_DECLARE_SIMPLE_TYPE(AppleDisplayPipeV2State, APPLE_DISPLAYPIPE_V2);
 
-#define H12P_UPPIPE_INT_FILTER (0x45818)
-#define H12P_UPPIPE_VER (0x46020)
-#define UPPIPE_VER_A1 (0x70045)
-#define H12P_UPPIPE_FRAME_SIZE (0x4603C)
+#define UPPIPEV2_INT_FILTER 0x45818
+#define UPPIPEV2_VER 0x46020
+#define UPPIPEV2_VER_A1 0x70045
+#define UPPIPEV2_FRAME_SIZE 0x4603C
 
-#define H12P_GENPIPE_BASE (0x50000)
-#define H12P_GENPIPE_REG_SIZE (0x08000)
-#define H12P_GP_CONFIG_CONTROL (0x00004)
-#define GP_CONFIG_CONTROL_ENABLED (1U << 31)
-#define GP_CONFIG_CONTROL_BLACK_FRAME (1U << 30)
-#define H12P_GENPIPE_PIXEL_FORMAT (0x0001C)
-#define GENPIPE_DFB_PIXEL_FORMAT_BGRA ((0x10 << 22) | (1 << 24) | (3 << 13))
-#define H12P_GENPIPE_PLANE_START (0x00030)
-#define H12P_GENPIPE_PLANE_END (0x00040)
-#define H12P_GENPIPE_PLANE_STRIDE (0x00060)
-#define H12P_GENPIPE_FRAME_SIZE (0x00080)
-
-#define H12P_PCC_SOFT_RESET (0xB0130)
+#define GENPIPEV2_BASE 0x50000
+#define GENPIPEV2_REG_SIZE 0x08000
+#define GENPIPEV2_GP_CONFIG_CONTROL 0x00004
+#define GENPIPEV2_GP_CONFIG_CONTROL_ENABLED (1U << 31)
+#define GENPIPEV2_GP_CONFIG_CONTROL_BLACK_FRAME (1U << 30)
+#define GENPIPEV2_PIXEL_FORMAT 0x0001C
+#define GENPIPEV2_DFB_PIXEL_FORMAT_BGRA ((0x10 << 22) | (1 << 24) | (3 << 13))
+#define GENPIPEV2_PLANE_START 0x00030
+#define GENPIPEV2_PLANE_END 0x00040
+#define GENPIPEV2_PLANE_STRIDE 0x00060
+#define GENPIPEV2_FRAME_SIZE 0x00080
 
 struct GenPipeState {
     size_t index;
@@ -60,15 +58,15 @@ struct GenPipeState {
 };
 typedef struct GenPipeState GenPipeState;
 
-#define H12P_GENPIPE_BASE_FOR(i) (H12P_GENPIPE_BASE + i * H12P_GENPIPE_REG_SIZE)
-#define H12P_GENPIPE_END_FOR(i) \
-    H12P_GENPIPE_BASE_FOR(i) + H12P_GENPIPE_REG_SIZE - 1
+#define GENPIPEV2_BASE_FOR(i) (GENPIPEV2_BASE + i * GENPIPEV2_REG_SIZE)
+#define GENPIPEV2_END_FOR(i) GENPIPEV2_BASE_FOR(i) + GENPIPEV2_REG_SIZE - 1
 
-struct AppleH12PState {
+struct AppleDisplayPipeV2State {
     /*< private >*/
     SysBusDevice parent_obj;
 
     /*< public >*/
+    const char *id;
     uint32_t width, height;
     MemoryRegion up_regs, vram;
     MemoryRegion *dma_mr;
@@ -81,6 +79,6 @@ struct AppleH12PState {
     QemuConsole *console;
 };
 
-void apple_h12p_create(MachineState *machine);
+void apple_displaypipe_v2_create(MachineState *machine, const char *name);
 
-#endif /* HW_FB_APPLE_H12P_H */
+#endif /* APPLE_DISPLAYPIPE_V2_H */
