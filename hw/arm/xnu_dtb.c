@@ -22,13 +22,13 @@
  */
 
 #include "qemu/osdep.h"
-#include "qapi/error.h"
 #include "hw/arm/boot.h"
-#include "sysemu/sysemu.h"
-#include "qemu/error-report.h"
 #include "hw/arm/xnu.h"
-#include "hw/loader.h"
 #include "hw/arm/xnu_dtb.h"
+#include "hw/loader.h"
+#include "qapi/error.h"
+#include "qemu/error-report.h"
+#include "sysemu/sysemu.h"
 
 #define min(_a, _b) ((_a) < (_b) ? (_a) : (_b))
 
@@ -182,7 +182,7 @@ void remove_dtb_node(DTBNode *parent, DTBNode *node)
 bool remove_dtb_node_by_name(DTBNode *parent, const char *name)
 {
     DTBNode *node = find_dtb_node(parent, name);
-    
+
     if (node) {
         remove_dtb_node(parent, node);
         return true;
@@ -217,9 +217,9 @@ DTBProp *set_dtb_prop(DTBNode *n, const char *name, uint32_t size,
 {
     DTBProp *prop;
     assert(n && name && val);
-    
+
     prop = find_dtb_prop(n, name);
-    
+
     if (!prop) {
         prop = g_new0(DTBProp, 1);
         n->props = g_list_append(n->props, prop);
@@ -328,7 +328,8 @@ DTBNode *find_dtb_node(DTBNode *node, const char *path)
 
             prop = find_dtb_prop(child, "name");
 
-            if (!prop) continue;
+            if (!prop)
+                continue;
 
             if (!strncmp((const char *)prop->value, next, prop->length)) {
                 node = child;
@@ -363,7 +364,8 @@ DTBNode *get_dtb_node(DTBNode *node, const char *path)
 
             prop = find_dtb_prop(child, "name");
 
-            if (!prop) continue;
+            if (!prop)
+                continue;
 
             if (!strncmp((const char *)prop->value, name, prop->length)) {
                 node = child;
@@ -403,4 +405,3 @@ void overwrite_dtb_prop_name(DTBProp *prop, uint8_t chr)
         ptr[i] = chr;
     }
 }
-

@@ -27,8 +27,8 @@
 #include "qemu/osdep.h"
 
 #define DT_PROP_FLAG_PLACEHOLDER (1 << 31)
-#define DT_PROP_FLAGS_MASK		(0xf0000000)
-#define DT_PROP_SIZE_MASK		(~DT_PROP_FLAGS_MASK)
+#define DT_PROP_FLAGS_MASK (0xf0000000)
+#define DT_PROP_SIZE_MASK (~DT_PROP_FLAGS_MASK)
 
 #define DTB_PROP_NAME_LEN (32)
 

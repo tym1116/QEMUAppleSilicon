@@ -6,7 +6,8 @@
 #define RETAB 0xd65f0fff
 #define PACIBSP 0xd503237f
 
-static uint32_t *find_next_insn(uint32_t *from, uint32_t num, uint32_t insn, uint32_t mask)
+static uint32_t *find_next_insn(uint32_t *from, uint32_t num, uint32_t insn,
+                                uint32_t mask)
 {
     while (num) {
         if ((*from & mask) == (insn & mask)) {
@@ -20,7 +21,8 @@ static uint32_t *find_next_insn(uint32_t *from, uint32_t num, uint32_t insn, uin
     return NULL;
 }
 
-static uint32_t *find_prev_insn(uint32_t *from, uint32_t num, uint32_t insn, uint32_t mask)
+static uint32_t *find_prev_insn(uint32_t *from, uint32_t num, uint32_t insn,
+                                uint32_t mask)
 {
     while (num) {
         if ((*from & mask) == (insn & mask)) {
@@ -34,7 +36,8 @@ static uint32_t *find_prev_insn(uint32_t *from, uint32_t num, uint32_t insn, uin
     return NULL;
 }
 
-static bool kpf_apfs_rootauth(struct xnu_pf_patch *patch, uint32_t *opcode_stream)
+static bool kpf_apfs_rootauth(struct xnu_pf_patch *patch,
+                              uint32_t *opcode_stream)
 {
     opcode_stream[0] = NOP;
     opcode_stream[1] = 0x52800000; /* mov w0, 0 */
@@ -43,7 +46,8 @@ static bool kpf_apfs_rootauth(struct xnu_pf_patch *patch, uint32_t *opcode_strea
     return true;
 }
 
-static bool kpf_apfs_vfsop_mount(struct xnu_pf_patch *patch, uint32_t *opcode_stream)
+static bool kpf_apfs_vfsop_mount(struct xnu_pf_patch *patch,
+                                 uint32_t *opcode_stream)
 {
     opcode_stream[0] = 0x52800000; /* mov w0, 0 */
     puts("KPF: found apfs_vfsop_mount");
@@ -66,13 +70,9 @@ static void kpf_apfs_patches(xnu_pf_patchset_t *patchset)
     uint64_t matches[] = {
         0x37280068, // tbnz w8, 5, 0xc
         0x52800a00, // mov w0, 0x50
-        0xd65f03c0  // ret
+        0xd65f03c0 // ret
     };
-    uint64_t masks[] = {
-        0xffffffff,
-        0xffffffff,
-        0xffffffff
-    };
+    uint64_t masks[] = { 0xffffffff, 0xffffffff, 0xffffffff };
 
     /* apfs_vfsop_mount:
      * This patch allows mount -urw /
@@ -105,7 +105,8 @@ static void kpf_apfs_patches(xnu_pf_patchset_t *patchset)
                      (void *)kpf_apfs_vfsop_mount);
 }
 
-static bool kpf_amfi_callback(struct xnu_pf_patch *patch, uint32_t *opcode_stream)
+static bool kpf_amfi_callback(struct xnu_pf_patch *patch,
+                              uint32_t *opcode_stream)
 {
     /* possibly AMFI patch
      * this is here to patch out the trustcache checks
@@ -117,11 +118,11 @@ static bool kpf_amfi_callback(struct xnu_pf_patch *patch, uint32_t *opcode_strea
      * both of them are patched to return 1
      */
     if (((opcode_stream[-1] & 0xFF000000) != 0x91000000) &&
-         ((opcode_stream[-2] & 0xFF000000) != 0x91000000)) {
-         /* add x*
-          * ldrb (optional and only on iOS 15.5b4+)
-          */
-         return false;
+        ((opcode_stream[-2] & 0xFF000000) != 0x91000000)) {
+        /* add x*
+         * ldrb (optional and only on iOS 15.5b4+)
+         */
+        return false;
     }
     bool found_something = false;
     /* find ldrb w*, [x*, 0xb] */
@@ -131,17 +132,18 @@ static bool kpf_amfi_callback(struct xnu_pf_patch *patch, uint32_t *opcode_strea
     uint32_t *start = opcode_stream;
     bool pac = false;
 
-    /* Most reliable marker of a stack frame seems to be "add x29, sp, 0x...". */
+    /* Most reliable marker of a stack frame seems to be "add x29, sp, 0x...".
+     */
     frame = find_prev_insn(opcode_stream, 10, 0x910003fd, 0xff8003ff);
     if (!frame) {
         puts("kpf_amfi_callback: Found AMFI (Leaf)");
     } else {
         puts("kpf_amfi_callback: Found AMFI (Routine)");
         start = find_prev_insn(frame, 10, 0xa9a003e0, 0xffe003e0);
-        if(!start) {
+        if (!start) {
             start = find_prev_insn(frame, 10, 0xd10003ff, 0xff8003ff);
         }
-        if(!start) {
+        if (!start) {
             puts("kpf_amfi_callback: failed to find start");
             return false;
         }
@@ -192,30 +194,26 @@ static bool kpf_amfi_callback(struct xnu_pf_patch *patch, uint32_t *opcode_strea
 static void kpf_amfi_patch(xnu_pf_patchset_t *xnu_text_exec_patchset)
 {
     /* This patch leads to AMFI believing that everything is in trustcache
-     * this is done by searching for the sequence below (example from an iPhone 7, 13.3):
-     * 0xfffffff0072382b0      29610091       add x9, x9, 0x18
+     * this is done by searching for the sequence below (example from an iPhone
+     * 7, 13.3): 0xfffffff0072382b0      29610091       add x9, x9, 0x18
      * 0xfffffff0072382b4      ca028052       movz w10, 0x16
      * 0xfffffff0072382b8      0bfd41d3       lsr x11, x8, 1
      * 0xfffffff0072382bc      6c250a9b       madd x12, x11, x10, x9
-     * then the callback checks if this is just a leaf instead of a full routinue
-     * if it isn't a leaf then it finds the start of the routine
-     * if cdhash is in x1 then [x2] = 2 and [x3] = 0
-     * Finally patches them to return true
-     * To find the patch in r2 use:
-     * /x 0000009100028052000000d30000009b:000000FF00FFFFFF000000FF000000FF
+     * then the callback checks if this is just a leaf instead of a full
+     * routinue if it isn't a leaf then it finds the start of the routine if
+     * cdhash is in x1 then [x2] = 2 and [x3] = 0 Finally patches them to return
+     * true To find the patch in r2 use: /x
+     * 0000009100028052000000d30000009b:000000FF00FFFFFF000000FF000000FF
      */
     uint64_t matches[] = {
-            0x52800200, // mov w*, 0x16
-            0xd3000000, // lsr *
-            0x9b000000  // madd *
+        0x52800200, // mov w*, 0x16
+        0xd3000000, // lsr *
+        0x9b000000 // madd *
     };
-    uint64_t masks[] = {
-            0xFFFFFF00,
-            0xFF000000,
-            0xFF000000
-    };
+    uint64_t masks[] = { 0xFFFFFF00, 0xFF000000, 0xFF000000 };
     xnu_pf_maskmatch(xnu_text_exec_patchset, "amfi_patch", matches, masks,
-                     sizeof(matches)/sizeof(uint64_t), true, (void *)kpf_amfi_callback);
+                     sizeof(matches) / sizeof(uint64_t), true,
+                     (void *)kpf_amfi_callback);
 }
 
 static bool kpf_found_trustcache = false;
@@ -232,8 +230,10 @@ static bool kpf_trustcache_callback(struct xnu_pf_patch *patch,
         return false;
     }
     kpf_found_trustcache = true;
-    fprintf(stderr, "%s: Found pmap_lookup_in_static_trust_cache_internal "
-                    "@ 0x%llx\n", __func__, ptov_static((hwaddr)start));
+    fprintf(stderr,
+            "%s: Found pmap_lookup_in_static_trust_cache_internal "
+            "@ 0x%llx\n",
+            __func__, ptov_static((hwaddr)start));
     *(start++) = 0x52802020; /* MOV W0, 0x101 */
     *(start++) = RET;
     return true;
@@ -249,13 +249,14 @@ static void kpf_trustcache_patch(xnu_pf_patchset_t *patchset)
         0xffffffc0,
     };
     xnu_pf_maskmatch(patchset, "trustcache16", matches, masks,
-                     sizeof(matches)/sizeof(uint64_t), true,
-                     (void*)kpf_trustcache_callback);
+                     sizeof(matches) / sizeof(uint64_t), true,
+                     (void *)kpf_trustcache_callback);
 }
 
 static bool kpf_amfi_sha1(struct xnu_pf_patch *patch, uint32_t *opcode_stream)
 {
-    uint32_t* cmp = find_next_insn(opcode_stream, 0x10, 0x7100081f, 0xFFFFFFFF); /* cmp w0, 2 */
+    uint32_t *cmp = find_next_insn(opcode_stream, 0x10, 0x7100081f,
+                                   0xFFFFFFFF); /* cmp w0, 2 */
     if (!cmp) {
         puts("kpf_amfi_sha1: failed to find cmp");
         return false;
@@ -270,11 +271,10 @@ static void kpf_amfi_kext_patches(xnu_pf_patchset_t *patchset)
 {
     /* this patch allows us to run binaries with SHA1 signatures
      * this is done by searching for the sequence below
-     *  and then finding the cmp w0, 2 (hashtype) and turning that into a cmp w0, w0
-     * Example from i7 13.3:
-     * 0xfffffff005f36b30      2201d036       tbz w2, 0x1a, 0xfffffff005f36b54
-     * 0xfffffff005f36b34      f30305aa       mov x19, x5
-     * 0xfffffff005f36b38      f40304aa       mov x20, x4
+     *  and then finding the cmp w0, 2 (hashtype) and turning that into a cmp
+     * w0, w0 Example from i7 13.3: 0xfffffff005f36b30      2201d036       tbz
+     * w2, 0x1a, 0xfffffff005f36b54 0xfffffff005f36b34      f30305aa       mov
+     * x19, x5 0xfffffff005f36b38      f40304aa       mov x20, x4
      * 0xfffffff005f36b3c      f50303aa       mov x21, x3
      * 0xfffffff005f36b40      f60300aa       mov x22, x0
      * 0xfffffff005f36b44      e00301aa       mov x0, x1
@@ -285,24 +285,27 @@ static void kpf_amfi_kext_patches(xnu_pf_patchset_t *patchset)
      * /x 0200d036:1f00f8ff
      */
     uint64_t i_matches[] = {
-            0x36d00002, // tbz w2, 0x1a, *
+        0x36d00002, // tbz w2, 0x1a, *
     };
     uint64_t i_masks[] = {
-            0xfff8001f,
+        0xfff8001f,
     };
     xnu_pf_maskmatch(patchset, "amfi_sha1", i_matches, i_masks,
-                     sizeof(i_matches)/sizeof(uint64_t), true, (void *)kpf_amfi_sha1);
+                     sizeof(i_matches) / sizeof(uint64_t), true,
+                     (void *)kpf_amfi_sha1);
 }
 
 bool kpf_has_done_mac_mount;
-static bool kpf_mac_mount_callback(struct xnu_pf_patch *patch, uint32_t *opcode_stream)
+static bool kpf_mac_mount_callback(struct xnu_pf_patch *patch,
+                                   uint32_t *opcode_stream)
 {
     puts("KPF: Found mac_mount");
     uint32_t *mac_mount = &opcode_stream[0];
     /* search for tbnz w*, 5, *
      * and nop it (enable MNT_UNION mounts)
      */
-    uint32_t *mac_mount_1 = find_prev_insn(mac_mount, 0x40, 0x37280000, 0xfffe0000);
+    uint32_t *mac_mount_1 =
+        find_prev_insn(mac_mount, 0x40, 0x37280000, 0xfffe0000);
 
     if (!mac_mount_1) {
         mac_mount_1 = find_next_insn(mac_mount, 0x40, 0x37280000, 0xfffe0000);
@@ -338,12 +341,13 @@ static bool kpf_mac_mount_callback(struct xnu_pf_patch *patch, uint32_t *opcode_
 static void kpf_mac_mount_patch(xnu_pf_patchset_t *xnu_text_exec_patchset)
 {
     /*
-     * This patch makes sure that we can remount the rootfs and that we can UNION mount
-     * we first search for a pretty unique instruction movz/orr w9, 0x1ffe
-     * then we search for a tbnz w*, 5, * (0x20 is MNT_UNION) and nop it
-     * After that we search for a ldrb w8, [x8, 0x71] and replace it with a movz x8, 0
-     * at 0x70 there are the flags and MNT_ROOTFS is 0x00004000 -> 0x4000 >> 8 -> 0x40 -> bit 6 -> the check is right below
-     * that way we can also perform operations on the rootfs
+     * This patch makes sure that we can remount the rootfs and that we can
+     * UNION mount we first search for a pretty unique instruction movz/orr w9,
+     * 0x1ffe then we search for a tbnz w*, 5, * (0x20 is MNT_UNION) and nop it
+     * After that we search for a ldrb w8, [x8, 0x71] and replace it with a movz
+     * x8, 0 at 0x70 there are the flags and MNT_ROOTFS is 0x00004000 -> 0x4000
+     * >> 8 -> 0x40 -> bit 6 -> the check is right below that way we can also
+     * perform operations on the rootfs
      */
     uint64_t matches[] = {
         0x321f2fe9, /* orr w9, wzr, 0x1ffe */
@@ -352,16 +356,17 @@ static void kpf_mac_mount_patch(xnu_pf_patchset_t *xnu_text_exec_patchset)
         0xFFFFFFFF,
     };
 
-    xnu_pf_maskmatch(xnu_text_exec_patchset, "mac_mount_patch1",
-                     matches, masks, sizeof(matches) / sizeof(uint64_t),
-                     false, (void *)kpf_mac_mount_callback);
+    xnu_pf_maskmatch(xnu_text_exec_patchset, "mac_mount_patch1", matches, masks,
+                     sizeof(matches) / sizeof(uint64_t), false,
+                     (void *)kpf_mac_mount_callback);
     matches[0] = 0x5283ffc9; /* movz w9, 0x1ffe */
-    xnu_pf_maskmatch(xnu_text_exec_patchset, "mac_mount_patch2",
-                     matches, masks, sizeof(matches) / sizeof(uint64_t),
-                     false, (void *)kpf_mac_mount_callback);
+    xnu_pf_maskmatch(xnu_text_exec_patchset, "mac_mount_patch2", matches, masks,
+                     sizeof(matches) / sizeof(uint64_t), false,
+                     (void *)kpf_mac_mount_callback);
 }
 
-static bool kpf_aksuc_handle(struct xnu_pf_patch *patch, uint32_t *opcode_stream)
+static bool kpf_aksuc_handle(struct xnu_pf_patch *patch,
+                             uint32_t *opcode_stream)
 {
     uint32_t *frame = NULL;
     uint32_t *start = NULL;
@@ -369,21 +374,26 @@ static bool kpf_aksuc_handle(struct xnu_pf_patch *patch, uint32_t *opcode_stream
 
     // Most reliable marker of a stack frame seems to be "add x29, sp, 0x...".
     frame = find_prev_insn(opcode_stream, 200, 0x910003fd, 0xff8003ff);
-    if(!frame) return false;
+    if (!frame)
+        return false;
 
     // Now find the insn that decrements sp. This can be either
     // "stp ..., ..., [sp, -0x...]!" or "sub sp, sp, 0x...".
     // Match top bit of imm on purpose, since we only want negative offsets.
     start = find_prev_insn(frame, 10, 0xa9a003e0, 0xffe003e0);
-    if(!start) start = find_prev_insn(frame, 10, 0xd10003ff, 0xff8003ff);
-    if(!start) return false;
+    if (!start)
+        start = find_prev_insn(frame, 10, 0xd10003ff, 0xff8003ff);
+    if (!start)
+        return false;
 
     pac = find_prev_insn(start, 5, PACIBSP, 0xffffffff) != NULL;
 
     start[0] = 0x52800000; /* MOV W0, 0 */
     start[1] = (pac ? RETAB : RET);
 
-    fprintf(stderr, "KPF: Found AppleKeyStoreUserClient::handleUserClientCommandGated\n");
+    fprintf(
+        stderr,
+        "KPF: Found AppleKeyStoreUserClient::handleUserClientCommandGated\n");
     return true;
 }
 
@@ -403,22 +413,27 @@ static void kpf_aks_kext_patches(xnu_pf_patchset_t *patchset)
      *  in radare2: /x 20a5e8f2:e0ffffff
      */
     uint64_t i_matches[] = {
-            0xf2e8a520, /* movk x*, 0x4529, lsl 48 */
+        0xf2e8a520, /* movk x*, 0x4529, lsl 48 */
     };
     uint64_t i_masks[] = {
-            0xffffffe0,
+        0xffffffe0,
     };
     xnu_pf_maskmatch(patchset, "AKSUC_handle", i_matches, i_masks,
-                     sizeof(i_matches)/sizeof(uint64_t), true, (void *)kpf_aksuc_handle);
+                     sizeof(i_matches) / sizeof(uint64_t), true,
+                     (void *)kpf_aksuc_handle);
 }
 
 void kpf(void)
 {
     struct mach_header_64 *hdr = xnu_header;
-    xnu_pf_patchset_t *xnu_text_exec_patchset = xnu_pf_patchset_create(XNU_PF_ACCESS_32BIT);
-    g_autofree xnu_pf_range_t *text_exec_range = xnu_pf_get_actual_text_exec(hdr);
-    xnu_pf_patchset_t *xnu_ppl_text_patchset = xnu_pf_patchset_create(XNU_PF_ACCESS_32BIT);
-    g_autofree xnu_pf_range_t *ppltext_exec_range = xnu_pf_section(hdr, "__PPLTEXT", "__text");
+    xnu_pf_patchset_t *xnu_text_exec_patchset =
+        xnu_pf_patchset_create(XNU_PF_ACCESS_32BIT);
+    g_autofree xnu_pf_range_t *text_exec_range =
+        xnu_pf_get_actual_text_exec(hdr);
+    xnu_pf_patchset_t *xnu_ppl_text_patchset =
+        xnu_pf_patchset_create(XNU_PF_ACCESS_32BIT);
+    g_autofree xnu_pf_range_t *ppltext_exec_range =
+        xnu_pf_section(hdr, "__PPLTEXT", "__text");
 
     xnu_pf_patchset_t *apfs_patchset;
     struct mach_header_64 *apfs_header;
@@ -442,7 +457,8 @@ void kpf(void)
     xnu_pf_patchset_destroy(apfs_patchset);
 
     amfi_patchset = xnu_pf_patchset_create(XNU_PF_ACCESS_32BIT);
-    amfi_header = xnu_pf_get_kext_header(hdr, "com.apple.driver.AppleMobileFileIntegrity");
+    amfi_header = xnu_pf_get_kext_header(
+        hdr, "com.apple.driver.AppleMobileFileIntegrity");
     amfi_text_exec_range = xnu_pf_section(amfi_header, "__TEXT_EXEC", "__text");
     kpf_amfi_kext_patches(amfi_patchset);
     xnu_pf_apply(amfi_text_exec_range, amfi_patchset);
@@ -459,7 +475,8 @@ void kpf(void)
     xnu_pf_patchset_destroy(xnu_ppl_text_patchset);
 
     aks_patchset = xnu_pf_patchset_create(XNU_PF_ACCESS_32BIT);
-    aks_header = xnu_pf_get_kext_header(hdr, "com.apple.driver.AppleSEPKeyStore");
+    aks_header =
+        xnu_pf_get_kext_header(hdr, "com.apple.driver.AppleSEPKeyStore");
     aks_text_exec_range = xnu_pf_section(aks_header, "__TEXT_EXEC", "__text");
     kpf_aks_kext_patches(aks_patchset);
     xnu_pf_apply(aks_text_exec_range, aks_patchset);

@@ -21,13 +21,13 @@
  */
 
 #include "qemu/osdep.h"
-#include "qapi/error.h"
-#include "sysemu/sysemu.h"
-#include "qemu/error-report.h"
 #include "exec/address-spaces.h"
-#include "exec/memory.h"
 #include "exec/hwaddr.h"
+#include "exec/memory.h"
 #include "hw/arm/xnu_mem.h"
+#include "qapi/error.h"
+#include "qemu/error-report.h"
+#include "sysemu/sysemu.h"
 
 hwaddr g_virt_base, g_phys_base, g_phys_slide = 0, g_virt_slide = 0;
 
@@ -80,7 +80,7 @@ hwaddr align_16k_high(hwaddr addr)
 
 hwaddr align_up(hwaddr addr, hwaddr alignment)
 {
-    return (addr + (alignment - 1)) & ~(alignment -1);
+    return (addr + (alignment - 1)) & ~(alignment - 1);
 }
 
 uint8_t get_lowest_non_zero_bit_index(hwaddr addr)
@@ -101,8 +101,8 @@ hwaddr get_low_bits_mask_for_bit_index(uint8_t bit_index)
     return (1 << bit_index) - 1;
 }
 
-void allocate_ram(MemoryRegion *top, const char *name, hwaddr addr,
-                  hwaddr size, int priority)
+void allocate_ram(MemoryRegion *top, const char *name, hwaddr addr, hwaddr size,
+                  int priority)
 {
     MemoryRegion *sec = g_new(MemoryRegion, 1);
     memory_region_init_ram(sec, NULL, name, size, &error_fatal);
