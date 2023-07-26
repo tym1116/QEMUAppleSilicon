@@ -1747,6 +1747,9 @@ static void t8030_machine_init(MachineState *machine)
     tms->soc_size = ranges[2];
 
     memset(buffer, 0, sizeof(buffer));
+    memcpy(buffer, "t8030", 5);
+    set_dtb_prop(tms->device_tree, "platform-name", 32, buffer);
+    memset(buffer, 0, sizeof(buffer));
     memcpy(buffer, "MWL72", 5);
     set_dtb_prop(tms->device_tree, "model-number", 32, buffer);
     memset(buffer, 0, sizeof(buffer));
