@@ -1,21 +1,18 @@
 #include "qemu/osdep.h"
-#include "hw/arm/xnu_dtb.h"
+#include "hw/arm/apple-silicon/dtb.h"
 #include "hw/gpio/apple_gpio.h"
 #include "hw/irq.h"
-#include "migration/vmstate.h"
 #include "qemu/bitops.h"
-#include "qemu/lockable.h"
 #include "qemu/log.h"
 #include "qemu/module.h"
-#include "qemu/timer.h"
 
 #define GPIO_MAX_PIN_NR (512)
 #define GPIO_MAX_INT_GRP_NR (0x7)
 
-#define rGPIOCFG(_n) (0x000 + (_n)*4)
-#define rGPIOINT(_g, _n) (0x800 + (_g)*0x40 + (((_n) + 31) >> 5) * 4)
+#define REG_GPIOCFG(_n) (0x000 + (_n) * 4)
+#define REG_GPIOINT(_g, _n) (0x800 + (_g) * 0x40 + (((_n) + 31) >> 5) * 4)
 
-#define rGPIO_NPL_IN_EN (0xC48)
+#define REG_GPIO_NPL_IN_EN (0xC48)
 
 /* Base Pin Defines for Apple GPIOs */
 
@@ -239,7 +236,7 @@ static void apple_gpio_cfg_write(AppleGPIOState *s, unsigned int pin,
                                  hwaddr addr, uint32_t value)
 {
     if (pin >= s->npins) {
-        qemu_log_mask(LOG_GUEST_ERROR, "%s: Bad offset 0x" HWADDR_FMT_plx "\n",
+        qemu_log_mask(LOG_UNIMP, "%s: Bad offset 0x" HWADDR_FMT_plx "\n",
                       __func__, addr);
         return;
     }
@@ -253,7 +250,7 @@ static uint32_t apple_gpio_cfg_read(AppleGPIOState *s, unsigned int pin,
     uint32_t val;
 
     if (pin >= s->npins) {
-        qemu_log_mask(LOG_GUEST_ERROR, "%s: Bad offset 0x" HWADDR_FMT_plx "\n",
+        qemu_log_mask(LOG_UNIMP, "%s: Bad offset 0x" HWADDR_FMT_plx "\n",
                       __func__, addr);
         return 0;
     }
@@ -274,12 +271,12 @@ static void apple_gpio_int_write(AppleGPIOState *s, unsigned int group,
     unsigned int offset;
 
     if (group >= s->nirqgrps) {
-        qemu_log_mask(LOG_GUEST_ERROR, "%s: Bad offset 0x" HWADDR_FMT_plx "\n",
+        qemu_log_mask(LOG_UNIMP, "%s: Bad offset 0x" HWADDR_FMT_plx "\n",
                       __func__, addr);
         return;
     }
 
-    offset = addr - rGPIOINT(group, 0);
+    offset = addr - REG_GPIOINT(group, 0);
     s->int_cfg[group][offset >> 2] &= ~value;
 
     if (find_first_bit((unsigned long *)s->int_cfg[group], s->npins) ==
@@ -294,12 +291,12 @@ static uint32_t apple_gpio_int_read(AppleGPIOState *s, unsigned int group,
     unsigned int offset;
 
     if (group >= s->nirqgrps) {
-        qemu_log_mask(LOG_GUEST_ERROR, "%s: Bad offset 0x" HWADDR_FMT_plx "\n",
+        qemu_log_mask(LOG_UNIMP, "%s: Bad offset 0x" HWADDR_FMT_plx "\n",
                       __func__, addr);
         return 0;
     }
 
-    offset = addr - rGPIOINT(group, 0);
+    offset = addr - REG_GPIOINT(group, 0);
     return s->int_cfg[group][offset >> 2];
 }
 
@@ -309,21 +306,27 @@ static void apple_gpio_reg_write(void *opaque, hwaddr addr, uint64_t data,
     AppleGPIOState *s = APPLE_GPIO(opaque);
 
     switch (addr) {
-    case rGPIOCFG(0)... rGPIOCFG(GPIO_MAX_PIN_NR - 1):
+    case REG_GPIOCFG(0)... REG_GPIOCFG(GPIO_MAX_PIN_NR - 1):
         if ((data & FUNC_MASK) > FUNC_ALT0) {
             qemu_log_mask(LOG_UNIMP,
                           "%s: alternate function 0x" HWADDR_FMT_plx
                           " is not supported\n",
                           __func__, ((data & FUNC_MASK) >> FUNC_SHIFT) - 1);
         }
-        return apple_gpio_cfg_write(s, (addr - rGPIOCFG(0)) >> 2, addr, data);
-
-    case rGPIOINT(0, 0)... rGPIOINT(GPIO_MAX_INT_GRP_NR, GPIO_MAX_PIN_NR - 1):
-        return apple_gpio_int_write(s, (addr - rGPIOINT(0, 0)) >> 6, addr,
+        return apple_gpio_cfg_write(s, (addr - REG_GPIOCFG(0)) >> 2, addr,
                                     data);
 
+    case REG_GPIOINT(0, 0)... REG_GPIOINT(GPIO_MAX_INT_GRP_NR,
+                                          GPIO_MAX_PIN_NR - 1):
+        return apple_gpio_int_write(s, (addr - REG_GPIOINT(0, 0)) >> 6, addr,
+                                    data);
+
+    case REG_GPIO_NPL_IN_EN:
+        s->npl = data;
+        break;
+
     default:
-        qemu_log_mask(LOG_GUEST_ERROR,
+        qemu_log_mask(LOG_UNIMP,
                       "%s: Bad offset 0x" HWADDR_FMT_plx ": " HWADDR_FMT_plx
                       "\n",
                       __func__, addr, data);
@@ -336,17 +339,21 @@ static uint64_t apple_gpio_reg_read(void *opaque, hwaddr addr, unsigned size)
     AppleGPIOState *s = APPLE_GPIO(opaque);
 
     switch (addr) {
-    case rGPIOCFG(0)... rGPIOCFG(GPIO_MAX_PIN_NR - 1):
-        return apple_gpio_cfg_read(s, (addr - rGPIOCFG(0)) >> 2, addr);
+    case REG_GPIOCFG(0)... REG_GPIOCFG(GPIO_MAX_PIN_NR - 1):
+        return apple_gpio_cfg_read(s, (addr - REG_GPIOCFG(0)) >> 2, addr);
 
-    case rGPIOINT(0, 0)... rGPIOINT(GPIO_MAX_INT_GRP_NR, GPIO_MAX_PIN_NR - 1):
-        return apple_gpio_int_read(s, (addr - rGPIOINT(0, 0)) >> 6, addr);
+    case REG_GPIOINT(0, 0)... REG_GPIOINT(GPIO_MAX_INT_GRP_NR,
+                                          GPIO_MAX_PIN_NR - 1):
+        return apple_gpio_int_read(s, (addr - REG_GPIOINT(0, 0)) >> 6, addr);
 
-    case rGPIO_NPL_IN_EN:
+    case REG_GPIO_NPL_IN_EN:
         return s->npl;
 
+    case 0xC4C:
+        return 0xFF;
+
     default:
-        qemu_log_mask(LOG_GUEST_ERROR, "%s: Bad offset 0x" HWADDR_FMT_plx "\n",
+        qemu_log_mask(LOG_UNIMP, "%s: Bad offset 0x" HWADDR_FMT_plx "\n",
                       __func__, addr);
     }
 

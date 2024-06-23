@@ -1,0 +1,7 @@
+# rtbuddy.c
+
+apple_rtbuddy_handle_mgmt_msg(const char *role, uint64_t raw, int state) "%s 0x%016" PRIx64 " state %d" 
+apple_rtbuddy_rollcall_finished(const char *role) "%s"
+apple_rtbuddy_mgmt_send_hello(const char *role) "%s"
+apple_rtbuddy_iop_start(const char *role) "%s"
+apple_rtbuddy_iop_wakeup(const char *role) "%s"
