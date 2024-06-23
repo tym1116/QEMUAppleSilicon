@@ -32,7 +32,7 @@ jobs:
         run: |
           mkdir build
           cd build
-          ../configure --target-list=aarch64-softmmu --disable-capstone --disable-slirp
+          ../configure --target-list=aarch64-softmmu --disable-capstone --disable-slirp --enable-lzfse --disable-werror
           make -j$(nproc)
 
       - name: Install qemu
@@ -71,7 +71,7 @@ jobs:
         run: |
           mkdir build
           cd build
-          LIBTOOL="glibtool" ../configure --target-list=aarch64-softmmu --disable-bsd-user --disable-guest-agent --enable-slirp --enable-capstone --enable-curses --enable-libssh --enable-virtfs --enable-zstd --extra-cflags=-DNCURSES_WIDECHAR=1 --disable-sdl --disable-gtk --enable-cocoa --enable-lzfse --disable-werror
+          LIBTOOL="glibtool" ../configure --target-list=aarch64-softmmu --disable-sdl --disable-gtk --enable-cocoa --enable-lzfse --disable-werror
           make -j$(sysctl -n hw.logicalcpu)
 
       - name: Install qemu
@@ -111,7 +111,7 @@ jobs:
         run: |
           mkdir build
           cd build
-          ../configure
+          ../configure --enable-lzfse --disable-werror
           make -j$(nproc)
 
       - name: Install qemu
@@ -150,7 +150,7 @@ jobs:
         run: |
           mkdir build
           cd build
-          ../configure
+          LIBTOOL="glibtool" ../configure --disable-sdl --disable-gtk --enable-cocoa --enable-lzfse --disable-werror
           make -j$(sysctl -n hw.logicalcpu)
 
       - name: Install qemu
