@@ -11,8 +11,8 @@ jobs:
     steps:
       - name: Install build dependencies
         run: |
-          apt-get update
-          apt-get install -y git libglib2.0-dev libfdt-dev libpixman-1-dev zlib1g-dev libtasn1-dev ninja-build build-essential cmake python3-venv
+          sudo apt-get update
+          sudo apt-get install -y git libglib2.0-dev libfdt-dev libpixman-1-dev zlib1g-dev libtasn1-dev ninja-build build-essential cmake python3-venv
 
       - name: Install lzfse
         run: |
@@ -21,8 +21,8 @@ jobs:
           mkdir build
           cd build
           cmake ..
-          make
-          make install
+          make -j$(nproc)
+          sudo make install
 
       - uses: actions/checkout@v2
         with:
@@ -55,13 +55,23 @@ jobs:
 
       - name: Install build dependencies
         run: |
-          brew install ninja pixman lzfse
+          brew install ninja pixman
+
+      - name: Install lzfse
+        run: |
+          git clone https://github.com/lzfse/lzfse
+          cd lzfse
+          mkdir build
+          cd build
+          cmake ..
+          make -j$(nproc)
+          sudo make install
 
       - name: Build qemu
         run: |
           mkdir build
           cd build
-          ../configure --target-list=aarch64-softmmu --disable-capstone --disable-slirp
+          LIBTOOL="glibtool" ../configure --target-list=aarch64-softmmu --disable-bsd-user --disable-guest-agent --enable-slirp --enable-capstone --enable-curses --enable-libssh --enable-virtfs --enable-zstd --extra-cflags=-DNCURSES_WIDECHAR=1 --disable-sdl --disable-gtk --enable-cocoa --enable-lzfse --disable-werror
           make -j$(sysctl -n hw.logicalcpu)
 
       - name: Install qemu
@@ -80,8 +90,8 @@ jobs:
     steps:
       - name: Install build dependencies
         run: |
-          apt-get update
-          apt-get install -y git libglib2.0-dev libfdt-dev libpixman-1-dev zlib1g-dev libtasn1-dev ninja-build build-essential cmake python3-venv
+          sudo apt-get update
+          sudo apt-get install -y git libglib2.0-dev libfdt-dev libpixman-1-dev zlib1g-dev libtasn1-dev ninja-build build-essential cmake python3-venv
 
       - name: Install lzfse
         run: |
@@ -90,8 +100,8 @@ jobs:
           mkdir build
           cd build
           cmake ..
-          make
-          make install
+          make -j$(nproc)
+          sudo make install
 
       - uses: actions/checkout@v2
         with:
@@ -124,7 +134,17 @@ jobs:
 
       - name: Install build dependencies
         run: |
-          brew install ninja pixman lzfse
+          brew install ninja pixman
+
+      - name: Install lzfse
+        run: |
+          git clone https://github.com/lzfse/lzfse
+          cd lzfse
+          mkdir build
+          cd build
+          cmake ..
+          make -j$(nproc)
+          sudo make install
 
       - name: Build qemu
         run: |
