@@ -583,9 +583,12 @@ static void apple_smc_realize(DeviceState *dev, Error **errp)
     smc_create_key_func(s, SmcKeyNESN, 4, SmcKeyTypeHex, SMC_ATTR_LITTLE_ENDIAN,
                         &smc_key_reject_read, &smc_key_nesn_write);
 
-    smc_create_key(s, SmcKeyAC_N, 4, SmcKeyTypeUint32, SMC_ATTR_LITTLE_ENDIAN,
+    value = 1;
+    smc_create_key(s, SmcKeyAC_N, 1, SmcKeyTypeUint8, SMC_ATTR_LITTLE_ENDIAN,
                    &value);
     value = 0;
+    smc_create_key(s, SMC_MAKE_IDENTIFIER('C', 'H', 'A', 'I'), 4,
+                   SmcKeyTypeUint32, SMC_ATTR_LITTLE_ENDIAN, &value);
     smc_create_key(s, SmcKeyTG0B, 8, SmcKeyTypeIoft, SMC_ATTR_LITTLE_ENDIAN,
                    &value);
     smc_create_key(s, SmcKeyTG0V, 8, SmcKeyTypeIoft, SMC_ATTR_LITTLE_ENDIAN,
