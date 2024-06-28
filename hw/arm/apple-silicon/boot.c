@@ -1228,11 +1228,11 @@ hwaddr arm_load_macho(MachoHeader64 *mh, AddressSpace *as, MemoryRegion *mem,
             }
 
 
-            // #if 0
+#if 0
             error_report(
                 "Loading %s to 0x%llx (filesize: 0x%llX vmsize: 0x%llX)",
                 region_name, load_to, segCmd->filesize, segCmd->vmsize);
-            // #endif
+#endif
             uint8_t *buf = g_malloc0(segCmd->vmsize);
             memcpy(buf, load_from, segCmd->filesize);
             allocate_and_copy(mem, as, region_name, load_to, segCmd->vmsize,
