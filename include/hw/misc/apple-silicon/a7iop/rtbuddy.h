@@ -8,9 +8,9 @@
 #define TYPE_APPLE_RTBUDDY "apple-rtbuddy"
 OBJECT_DECLARE_TYPE(AppleRTBuddy, AppleRTBuddyClass, APPLE_RTBUDDY)
 
-#define EP_USER_START 32
 #define EP_MANAGEMENT 0
 #define EP_CRASHLOG 1
+#define EP_USER_START 32
 
 typedef enum {
     EP0_IDLE,

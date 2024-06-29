@@ -440,9 +440,9 @@ void macho_populate_dtb(DTBNode *root, AppleBootInfo *info)
     uint64_t memmap[2] = { 0 };
 
     child = get_dtb_node(root, "chosen");
-    g_assert(child != NULL);
+    g_assert_nonnull(child);
     prop = find_dtb_prop(child, "random-seed");
-    g_assert(prop != NULL);
+    g_assert_nonnull(prop);
     qemu_guest_getrandom_nofail(prop->value, prop->length);
 
     set_dtb_prop(child, "dram-base", 8, &info->dram_base);
@@ -461,7 +461,7 @@ void macho_populate_dtb(DTBNode *root, AppleBootInfo *info)
     prop = set_dtb_prop(child, "effective-production-status-ap", sizeof(data),
                         &data);
 
-    // these are needed by the image4 parser module
+    // These are needed by the image4 parser
     set_dtb_prop(child, "security-domain", sizeof(data), &data);
     set_dtb_prop(child, "chip-epoch", sizeof(data), &data);
     set_dtb_prop(child, "amfi-allows-trust-cache-load", sizeof(data), &data);
@@ -477,7 +477,7 @@ void macho_populate_dtb(DTBNode *root, AppleBootInfo *info)
     macho_dtb_node_process(root, NULL);
 
     child = get_dtb_node(root, "chosen/memory-map");
-    g_assert(child != NULL);
+    g_assert_nonnull(child);
 
     set_dtb_prop(child, "RAMDisk", sizeof(memmap), memmap);
     set_dtb_prop(child, "TrustCache", sizeof(memmap), memmap);
