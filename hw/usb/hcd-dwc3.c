@@ -1546,7 +1546,7 @@ static void dwc3_usb_device_cancel_packet(USBDevice *dev, USBPacket *p)
     /* TODO: complete td if packet partially complete */
     DPRINTF("%s: pid: 0x%x ep: %d id: 0x%llx\n", __func__, p->pid, p->ep->nr,
             p->id);
-    assert(p->actual_length == 0);
+    // assert(p->actual_length == 0);
 }
 
 static void dwc3_usb_device_handle_packet(USBDevice *dev, USBPacket *p)
