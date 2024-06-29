@@ -869,8 +869,10 @@ static uint64_t usb_dwc3_glbreg_read(void *ptr, hwaddr addr, int index)
     uint32_t val;
 
     if (addr > GHWPARAMS8) {
+#if 0
         qemu_log_mask(LOG_GUEST_ERROR, "%s: Bad offset 0x%" HWADDR_PRIx "\n",
                       __func__, addr);
+#endif
         return 0;
     }
 
@@ -895,8 +897,10 @@ static void usb_dwc3_glbreg_write(void *ptr, hwaddr addr, int index,
     int iflg = 0;
 
     if (addr > GHWPARAMS8) {
+#if 0
         qemu_log_mask(LOG_GUEST_ERROR, "%s: Bad offset 0x%" HWADDR_PRIx "\n",
                       __func__, addr);
+#endif
         return;
     }
 
