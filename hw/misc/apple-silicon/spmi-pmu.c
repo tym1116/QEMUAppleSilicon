@@ -5,6 +5,7 @@
 #include "migration/vmstate.h"
 #include "qemu/module.h"
 #include "qemu/timer.h"
+#include "sysemu/runstate.h"
 #include "sysemu/sysemu.h"
 
 #define TYPE_APPLE_SPMI_PMU "apple.spmi.pmu"
@@ -100,6 +101,7 @@ static void apple_spmi_pmu_alarm(void *opaque)
     AppleSPMIPMUState *p = APPLE_SPMI_PMU(opaque);
     REG32(p, p->reg_alarm_event) |= kDIALOG_RTC_EVENT_ALARM;
     apple_spmi_pmu_update_irq(p);
+    qemu_system_wakeup_request(QEMU_WAKEUP_REASON_RTC, NULL);
 }
 
 static void apple_spmi_pmu_set_alarm(AppleSPMIPMUState *p)
@@ -190,7 +192,7 @@ DeviceState *apple_spmi_pmu_create(DTBNode *node)
     DTBProp *prop;
 
     prop = find_dtb_prop(node, "reg");
-    g_assert(prop);
+    g_assert_nonnull(prop);
     spmi_set_slave_sid(SPMI_SLAVE(dev), *(uint32_t *)prop->value);
 
     prop = find_dtb_prop(node, "info-rtc");
@@ -216,6 +218,7 @@ DeviceState *apple_spmi_pmu_create(DTBNode *node)
     apple_spmi_pmu_set_tick_offset(p, p->tick_offset);
 
     p->timer = timer_new_ns(QEMU_CLOCK_VIRTUAL, apple_spmi_pmu_alarm, p);
+    qemu_system_wakeup_enable(QEMU_WAKEUP_REASON_RTC, true);
 
     qdev_init_gpio_out(dev, &p->irq, 1);
     return dev;

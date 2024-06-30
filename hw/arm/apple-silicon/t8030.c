@@ -1595,6 +1595,8 @@ static void t8030_create_pmu(MachineState *machine, const char *parent,
 
     qdev_connect_gpio_out(pmu, 0, qdev_get_gpio_in(DEVICE(spmi), ints[0]));
     spmi_slave_realize_and_unref(SPMI_SLAVE(pmu), spmi->bus, &error_fatal);
+
+    qemu_register_wakeup_support();
 }
 
 static void t8030_create_smc(MachineState *machine)

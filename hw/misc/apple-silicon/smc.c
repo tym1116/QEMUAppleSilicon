@@ -298,17 +298,10 @@ static uint8_t smc_key_mbse_write(AppleSMCState *s, smc_key *k, void *payload,
         qemu_system_shutdown_request(SHUTDOWN_CAUSE_GUEST_SHUTDOWN);
         return kSMCSuccess;
     case SMC_MAKE_IDENTIFIER('s', 'u', 's', 'p'):
-        /*
-         * XXX: iOS actually suspends/deep sleeps when "turn off",
-         * It sets a RTC wake alarm before suspending
-         * However, we are not interested in emulating deep sleep,
-         * so I put a shutdown request here instead of a suspend.
-         */
-        /* qemu_system_suspend_request(); */
-        qemu_system_shutdown_request(SHUTDOWN_CAUSE_GUEST_SHUTDOWN);
+        qemu_system_suspend_request();
         return kSMCSuccess;
     case SMC_MAKE_IDENTIFIER('r', 'e', 's', 't'):
-        /* Reboot is handled by wdt */
+        qemu_system_reset_request(SHUTDOWN_CAUSE_GUEST_SHUTDOWN);
         return kSMCSuccess;
     case SMC_MAKE_IDENTIFIER('s', 'l', 'p', 'w'):
         return kSMCSuccess;
