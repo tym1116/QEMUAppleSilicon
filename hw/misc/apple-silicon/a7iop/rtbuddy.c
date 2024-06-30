@@ -47,13 +47,13 @@ static inline void apple_rtbuddy_send_msg(AppleRTBuddy *s, uint32_t ep,
 
 void apple_rtbuddy_send_control_msg(AppleRTBuddy *s, uint32_t ep, uint64_t data)
 {
-    g_assert(ep < EP_USER_START);
+    g_assert_cmpuint(ep, <, EP_USER_START);
     apple_rtbuddy_send_msg(s, ep, data);
 }
 
 void apple_rtbuddy_send_user_msg(AppleRTBuddy *s, uint32_t ep, uint64_t data)
 {
-    g_assert(ep < 224);
+    g_assert_cmpuint(ep, <, 224);
     apple_rtbuddy_send_msg(s, ep + EP_USER_START, data);
 }
 
@@ -76,35 +76,35 @@ void apple_rtbuddy_register_control_ep(AppleRTBuddy *s, uint32_t ep,
                                        void *opaque,
                                        AppleRTBuddyEPHandler *handler)
 {
-    g_assert(ep < EP_USER_START);
+    g_assert_cmpuint(ep, <, EP_USER_START);
     apple_rtbuddy_register_ep(s, ep, opaque, handler, false);
 }
 
 void apple_rtbuddy_register_user_ep(AppleRTBuddy *s, uint32_t ep, void *opaque,
                                     AppleRTBuddyEPHandler *handler)
 {
-    g_assert(ep < 224);
+    g_assert_cmpuint(ep, <, 224);
     apple_rtbuddy_register_ep(s, ep + EP_USER_START, opaque, handler, true);
 }
 
 static inline void apple_rtbuddy_unregister_ep(AppleRTBuddy *s, uint32_t ep)
 {
-    void *hd = g_tree_lookup(s->endpoints, GUINT_TO_POINTER(ep));
-    if (hd) {
+    void *ep_data = g_tree_lookup(s->endpoints, GUINT_TO_POINTER(ep));
+    if (ep_data != NULL) {
         g_tree_remove(s->endpoints, GUINT_TO_POINTER(ep));
-        g_free(hd);
+        g_free(ep_data);
     }
 }
 
 void apple_rtbuddy_unregister_control_ep(AppleRTBuddy *s, uint32_t ep)
 {
-    g_assert(ep < EP_USER_START);
+    g_assert_cmpuint(ep, <, EP_USER_START);
     apple_rtbuddy_unregister_ep(s, ep);
 }
 
 void apple_rtbuddy_unregister_user_ep(AppleRTBuddy *s, uint32_t ep)
 {
-    g_assert(ep < 224);
+    g_assert_cmpuint(ep, <, 224);
     apple_rtbuddy_unregister_ep(s, ep + EP_USER_START);
 }
 

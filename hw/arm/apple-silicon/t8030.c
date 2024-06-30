@@ -1840,7 +1840,7 @@ static void t8030_create_sep(MachineState *machine)
 
     sep = apple_sep_create(child, T8030_SEPROM_BASE, A13_MAX_CPU + 1,
                            t8030_machine->build_version, true);
-    g_assert(sep);
+    g_assert_nonnull(sep);
 
     object_property_add_child(OBJECT(machine), "sep", OBJECT(sep));
 
@@ -1905,7 +1905,7 @@ static void t8030_create_sep_sim(MachineState *machine)
     g_assert_nonnull(child);
 
     sep = apple_sep_sim_create(child, true);
-    g_assert(sep);
+    g_assert_nonnull(sep);
 
     object_property_add_child(OBJECT(machine), "sep", OBJECT(sep));
 
