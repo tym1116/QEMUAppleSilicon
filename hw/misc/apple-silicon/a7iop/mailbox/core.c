@@ -103,12 +103,6 @@ bool apple_a7iop_mailbox_is_empty(AppleA7IOPMailbox *s)
     return QTAILQ_EMPTY(&s->inbox);
 }
 
-static size_t apple_a7iop_mailbox_count(AppleA7IOPMailbox *s)
-{
-    QEMU_LOCK_GUARD(&s->lock);
-    return s->count;
-}
-
 static void apple_a7iop_mailbox_send(AppleA7IOPMailbox *s,
                                      AppleA7IOPMessage *msg)
 {
