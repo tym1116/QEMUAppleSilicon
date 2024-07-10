@@ -376,7 +376,7 @@ static void apple_sep_sim_handle_control_msg(AppleSEPSimState *s,
         uint16_t val16 = 0;
         asn1_write_value(art, "Info.Counter", &val16, sizeof(val16));
         char byte0x20[32];
-        bzero(byte0x20, sizeof(byte0x20));
+        memset(byte0x20, 0, sizeof(byte0x20));
         asn1_write_value(art, "Info.ManifestHash", byte0x20, 20);
         asn1_write_value(art, "Info.SleepHash", byte0x20, 20);
         asn1_write_value(art, "Info.Nonce", byte0x20, 0);
@@ -620,7 +620,7 @@ static void apple_sep_sim_handle_keystore_msg(AppleSEPSimState *s,
     const KeystoreIPCHeader *msg_hdr = (KeystoreIPCHeader *)msg_buf;
 #if 0
     char fn[128];
-    bzero(fn, sizeof(fn));
+    memset(fn, 0, sizeof(fn));
     snprintf(fn, sizeof(fn), "/Users/visual/Downloads/SKSMessages/0x%02X_%lld.bin", msg_code,
              msg_hdr->time_msecs);
     g_file_set_contents(fn, (gchar *)msg_buf, msg->size, NULL);
