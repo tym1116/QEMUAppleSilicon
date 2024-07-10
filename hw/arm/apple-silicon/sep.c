@@ -258,8 +258,9 @@ static const MemoryRegionOps misc2_reg_ops = {
 };
 
 
-AppleSEPState *apple_sep_create(DTBNode *node, vaddr base, uint32_t cpu_id,
-                                uint32_t build_version, bool modern)
+AppleSEPState *apple_sep_create(DTBNode *node, MemoryRegion *ool_mr, vaddr base,
+                                uint32_t cpu_id, uint32_t build_version,
+                                bool modern)
 {
     DeviceState *dev;
     AppleA7IOP *a7iop;
@@ -307,6 +308,15 @@ AppleSEPState *apple_sep_create(DTBNode *node, vaddr base, uint32_t cpu_id,
     sysbus_init_mmio(sbd, &s->misc2_mr);
     DTBNode *child = find_dtb_node(node, "iop-sep-nub");
     g_assert(child);
+
+    s->ool_mr = ool_mr;
+    g_assert(s->ool_mr);
+    g_assert(
+        object_property_add_const_link(OBJECT(s), "ool-mr", OBJECT(s->ool_mr)));
+    s->ool_as = g_new0(AddressSpace, 1);
+    g_assert(s->ool_as);
+    address_space_init(s->ool_as, s->ool_mr, "sep.ool");
+
     // SEPFW needs to be loaded by restore, supposedly
     // uint32_t data = 1;
     // set_dtb_prop(child, "sepfw-loaded", sizeof(data), &data);

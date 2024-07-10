@@ -1837,11 +1837,22 @@ static void t8030_create_sep(MachineState *machine)
 
     armio = find_dtb_node(t8030_machine->device_tree, "arm-io");
     g_assert_nonnull(armio);
+
+    dart = APPLE_DART(
+        object_property_get_link(OBJECT(machine), "dart-sep", &error_fatal));
+
+    child = find_dtb_node(armio, "dart-sep/mapper-sep");
+    g_assert_nonnull(child);
+    prop = find_dtb_prop(child, "reg");
+    g_assert_nonnull(prop);
+
     child = find_dtb_node(armio, "sep");
     g_assert_nonnull(child);
 
-    sep = apple_sep_create(child, T8030_SEPROM_BASE, A13_MAX_CPU + 1,
-                           t8030_machine->build_version, true);
+    sep = apple_sep_create(
+        child,
+        MEMORY_REGION(apple_dart_iommu_mr(dart, *(uint32_t *)prop->value)),
+        T8030_SEPROM_BASE, A13_MAX_CPU + 1, t8030_machine->build_version, true);
     g_assert_nonnull(sep);
 
     object_property_add_child(OBJECT(machine), "sep", OBJECT(sep));
@@ -1869,23 +1880,6 @@ static void t8030_create_sep(MachineState *machine)
             SYS_BUS_DEVICE(sep), i,
             qdev_get_gpio_in(DEVICE(t8030_machine->aic), ints[i]));
     }
-
-    dart = APPLE_DART(
-        object_property_get_link(OBJECT(machine), "dart-sep", &error_fatal));
-    g_assert(dart);
-    child = find_dtb_node(armio, "dart-sep");
-    g_assert(child);
-    child = find_dtb_node(child, "mapper-sep");
-    g_assert(child);
-    prop = find_dtb_prop(child, "reg");
-    g_assert(prop);
-    sep->dma_mr =
-        MEMORY_REGION(apple_dart_iommu_mr(dart, *(uint32_t *)prop->value));
-    g_assert(sep->dma_mr);
-    g_assert(object_property_add_const_link(OBJECT(sep), "dma-mr",
-                                            OBJECT(sep->dma_mr)));
-    sep->dma_as = g_new0(AddressSpace, 1);
-    address_space_init(sep->dma_as, sep->dma_mr, "sep.dma");
 
     sysbus_realize_and_unref(SYS_BUS_DEVICE(sep), &error_fatal);
 }

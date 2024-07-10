@@ -56,8 +56,8 @@ struct AppleSEPState {
     vaddr base;
     ARMCPU *cpu;
     bool modern;
-    MemoryRegion *dma_mr;
-    AddressSpace *dma_as;
+    MemoryRegion *ool_mr;
+    AddressSpace *ool_as;
     MemoryRegion trng_mr;
     MemoryRegion misc0_mr;
     MemoryRegion misc1_mr;
@@ -68,7 +68,8 @@ struct AppleSEPState {
     uint8_t misc2_regs[REG_SIZE];
 };
 
-AppleSEPState *apple_sep_create(DTBNode *node, vaddr base, uint32_t cpu_id,
-                                uint32_t build_version, bool modern);
+AppleSEPState *apple_sep_create(DTBNode *node, MemoryRegion *ool_mr, vaddr base,
+                                uint32_t cpu_id, uint32_t build_version,
+                                bool modern);
 
 #endif /* HW_ARM_APPLE_SILICON_SEP_H */
