@@ -347,10 +347,10 @@ static void apple_a7iop_mailbox_reset(DeviceState *dev)
     s->iop_dir_en = true;
     s->ap_dir_en = true;
     s->underflow = false;
-    bzero(s->iop_recv_reg, sizeof(s->iop_recv_reg));
-    bzero(s->ap_recv_reg, sizeof(s->ap_recv_reg));
-    bzero(s->iop_send_reg, sizeof(s->iop_send_reg));
-    bzero(s->ap_send_reg, sizeof(s->ap_send_reg));
+    memset(s->iop_recv_reg, 0, sizeof(s->iop_recv_reg));
+    memset(s->ap_recv_reg, 0, sizeof(s->ap_recv_reg));
+    memset(s->iop_send_reg, 0, sizeof(s->iop_send_reg));
+    memset(s->ap_send_reg, 0, sizeof(s->ap_send_reg));
 
     while (!QTAILQ_EMPTY(&s->inbox)) {
         msg = QTAILQ_FIRST(&s->inbox);

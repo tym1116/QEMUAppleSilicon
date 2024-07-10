@@ -2032,7 +2032,7 @@ static void t8030_machine_init(MachineState *machine)
     DTBProp *prop;
     hwaddr *ranges;
 
-    bzero(buffer, sizeof(buffer));
+    memset(buffer, 0, sizeof(buffer));
 
     t8030_machine = T8030_MACHINE(machine);
 

@@ -293,7 +293,7 @@ static void adbe_v2_realize(DeviceState *dev, Error **errp)
 {
     ADBEV2 *s = ADBE_V2(dev);
 
-    bzero(&s->dbe_state, sizeof(s->dbe_state));
+    memset(&s->dbe_state, 0, sizeof(s->dbe_state));
     s->dbe_state.vftg_ctl =
         DBE_VFTG_CTRL_VFTG_ENABLE | DBE_VFTG_CTRL_VFTG_STATUS |
         DBE_VFTG_CTRL_UPDATE_ENABLE_TIMING | DBE_VFTG_CTRL_UPDATE_REQ_TIMING;
@@ -305,9 +305,6 @@ static Property adbe_v2_props[] = {
     // iPhone 4/4S
     DEFINE_PROP_UINT32("width", ADBEV2, width, 640),
     DEFINE_PROP_UINT32("height", ADBEV2, height, 960),
-    // iPhone 11
-    // DEFINE_PROP_UINT32("width", ADBEV2, width, 828),
-    // DEFINE_PROP_UINT32("height", ADBEV2, height, 1792),
     DEFINE_PROP_END_OF_LIST()
 };
 

@@ -67,7 +67,7 @@ static void apple_a7iop_mailbox_reg_write_v2(void *opaque, hwaddr addr,
         break;
     default:
         qemu_log_mask(LOG_GUEST_ERROR,
-                      "%s unknown @ 0x" HWADDR_FMT_plx " value 0x%" PRIx64,
+                      "%s unknown @ 0x" HWADDR_FMT_plx " value 0x%" PRIx64 "\n",
                       __FUNCTION__, addr, data);
         break;
     }
@@ -99,7 +99,7 @@ static uint64_t apple_a7iop_mailbox_reg_read_v2(void *opaque, hwaddr addr,
                 memcpy(s->iop_recv_reg, msg->data, sizeof(s->iop_recv_reg));
                 g_free(msg);
             } else {
-                bzero(s->iop_recv_reg, sizeof(s->iop_recv_reg));
+                memset(s->iop_recv_reg, 0, sizeof(s->iop_recv_reg));
             }
         }
         QEMU_FALLTHROUGH;
@@ -117,7 +117,7 @@ static uint64_t apple_a7iop_mailbox_reg_read_v2(void *opaque, hwaddr addr,
                 memcpy(s->ap_recv_reg, msg->data, sizeof(s->ap_recv_reg));
                 g_free(msg);
             } else {
-                bzero(s->ap_recv_reg, sizeof(s->ap_recv_reg));
+                memset(s->ap_recv_reg, 0, sizeof(s->ap_recv_reg));
             }
         }
         QEMU_FALLTHROUGH;
@@ -128,7 +128,7 @@ static uint64_t apple_a7iop_mailbox_reg_read_v2(void *opaque, hwaddr addr,
         }
         break;
     default:
-        qemu_log_mask(LOG_GUEST_ERROR, "%s unknown @ 0x" HWADDR_FMT_plx,
+        qemu_log_mask(LOG_GUEST_ERROR, "%s unknown @ 0x" HWADDR_FMT_plx "\n",
                       __FUNCTION__, addr);
         break;
     }

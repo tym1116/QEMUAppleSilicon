@@ -288,7 +288,7 @@ static bool apple_genpipev2_init(GenPipeState *s, size_t index,
                                  MemoryRegion *vram, AddressSpace *dma_as,
                                  AppleDisplayPipeV2State *disp_state)
 {
-    bzero(s, sizeof(*s));
+    memset(s, 0, sizeof(*s));
     s->index = index;
     s->vram = vram;
     s->dma_as = dma_as;
