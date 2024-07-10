@@ -1936,59 +1936,64 @@ static void *get_page_write(CPUARMState *env, uint64_t vaddr_in, int mmu_idx)
 
 uint64_t HELPER(wkdmc)(CPUARMState *env, uint64_t vaddr_in, uint64_t vaddr_out)
 {
-    int mmu_idx = arm_env_mmu_index(env);
-    char *in_mem, *out_mem;
-    uint8_t scratch[TARGET_PAGE_SIZE];
-    uint8_t scratch1[TARGET_PAGE_SIZE];
-    vaddr_in &= TARGET_PAGE_MASK;
-    vaddr_out &= ~0x3f;
-    int out_offset = vaddr_out - (vaddr_out & TARGET_PAGE_MASK);
-    int csize = TARGET_PAGE_SIZE - out_offset;
+    int mmu_idx;
+    char *in_mem;
+    char *out_mem;
+    int out_offset;
+    int csize;
 
     if (TARGET_PAGE_BITS < 10 || TARGET_PAGE_BITS > 14) {
         return -1;
     }
 
+    mmu_idx = arm_env_mmu_index(env);
+    vaddr_in &= TARGET_PAGE_MASK;
+    vaddr_out &= ~0x3f;
     in_mem = get_page_read(env, vaddr_in, mmu_idx);
     out_mem = get_page_write(env, vaddr_out, mmu_idx);
-    if (in_mem && out_mem) {
-        memcpy(scratch1, in_mem, TARGET_PAGE_SIZE);
-        int n = WKdm_compress(scratch1, scratch, csize);
-        if (n <= 0) {
-            return n;
-        }
-        if (n > csize) {
-            return -1;
-        }
-        memcpy(out_mem + out_offset, scratch, n);
-        return n >> 6;
+    out_offset = vaddr_out - (vaddr_out & TARGET_PAGE_MASK);
+    csize = TARGET_PAGE_SIZE - out_offset;
+
+    if (in_mem == NULL || out_mem == NULL) {
+        return -1;
     }
-    return -1;
+
+    int n = WKdm_compress(in_mem, out_mem + out_offset, csize);
+    if (n <= 0) {
+        return n;
+    }
+    if (n > csize) {
+        return -1;
+    }
+    return n >> 6;
 }
 
 uint64_t HELPER(wkdmd)(CPUARMState *env, uint64_t vaddr_in, uint64_t vaddr_out)
 {
-    int mmu_idx = arm_env_mmu_index(env);
+    int mmu_idx;
     uint8_t *in_mem, *out_mem;
-    uint8_t scratch[TARGET_PAGE_SIZE];
-    uint8_t scratch2[TARGET_PAGE_SIZE];
-    vaddr_out &= TARGET_PAGE_MASK;
-    vaddr_in &= ~0x3f;
-    int in_offset = vaddr_in - (vaddr_in & TARGET_PAGE_MASK);
-    int csize = TARGET_PAGE_SIZE - in_offset;
+    int in_offset;
+    int csize;
 
     if (TARGET_PAGE_BITS < 10 || TARGET_PAGE_BITS > 14) {
         return 0x3000;
     }
 
+    mmu_idx = arm_env_mmu_index(env);
+    vaddr_out &= TARGET_PAGE_MASK;
+    vaddr_in &= ~0x3f;
     in_mem = get_page_read(env, vaddr_in, mmu_idx);
     out_mem = get_page_write(env, vaddr_out, mmu_idx);
-    if (in_mem && out_mem) {
-        memcpy(scratch, in_mem + in_offset, csize);
-        if (WKdm_decompress(scratch, scratch2, csize)) {
-            memcpy(out_mem, scratch2, TARGET_PAGE_SIZE);
-            return 0;
-        }
+    in_offset = vaddr_in - (vaddr_in & TARGET_PAGE_MASK);
+    csize = TARGET_PAGE_SIZE - in_offset;
+
+    if (in_mem == NULL || out_mem == NULL) {
+        return 0x3000;
     }
+
+    if (WKdm_decompress(in_mem + in_offset, out_mem, csize)) {
+        return 0;
+    }
+
     return 0x3000;
 }
