@@ -30,48 +30,48 @@
 #endif
 
 typedef enum sio_op {
-    GET_PARAM = 2,
-    GET_PARAM_RETURN = 103,
-    CONFIG_SHIM = 5,
-    SET_PARAM = 3,
-    ERROR = 2,
-    SET_PARAM_ERROR = 3,
-    START_DMA = 6,
-    QUERY_DMA = 7,
-    STOP_DMA = 8,
-    ACK = 101,
-    ASYNC_ERROR = 102,
-    DMA_COMPLETE = 104,
-    QUERY_DMA_OK = 105,
+    OP_GET_PARAM = 2,
+    OP_GET_PARAM_RETURN = 103,
+    OP_CONFIG_SHIM = 5,
+    OP_SET_PARAM = 3,
+    OP_ERROR = 2,
+    OP_SET_PARAM_ERROR = 3,
+    OP_START_DMA = 6,
+    OP_QUERY_DMA = 7,
+    OP_STOP_DMA = 8,
+    OP_ACK = 101,
+    OP_ASYNC_ERROR = 102,
+    OP_DMA_COMPLETE = 104,
+    OP_QUERY_DMA_OK = 105,
 } sio_op;
 
 typedef enum sio_endpoint {
-    CONTROL = 0,
-    PERF = 3,
+    EP_CONTROL = 0,
+    EP_PERF = 3,
 } sio_endpoint;
 
 typedef enum sio_param_id {
-    PROTOCOL = 0, /* Should be 9 for 14.0b5 */
-    DMA_SEGMENT_BASE = 1,
-    DMA_SEGMENT_SIZE = 2,
-    DMA_RESPONSE_BASE = 11,
-    DMA_RESPONSE_SIZE = 12,
-    PERF_BASE = 13,
-    PERF_SIZE = 14,
-    PANIC_BASE = 15,
-    PANIC_SIZE = 16,
-    PIO_BASE = 26,
-    PIO_SIZE = 27,
-    DEVICES_BASE = 28,
-    DEVICES_SIZE = 29,
-    TUNABLE_0_BASE = 30,
-    TUNABLE_0_SIZE = 31,
-    TUNABLE_1_BASE = 32,
-    TUNABLE_1_SIZE = 33,
-    PS_REGS_BASE = 36,
-    PS_REGS_SIZE = 37,
-    FORWARD_IRQS_BASE = 38,
-    FORWARD_IRQS_SIZE = 39,
+    PARAM_PROTOCOL = 0, /* Should be 9 for 14.0b5 */
+    PARAM_DMA_SEGMENT_BASE = 1,
+    PARAM_DMA_SEGMENT_SIZE = 2,
+    PARAM_DMA_RESPONSE_BASE = 11,
+    PARAM_DMA_RESPONSE_SIZE = 12,
+    PARAM_PERF_BASE = 13,
+    PARAM_PERF_SIZE = 14,
+    PARAM_PANIC_BASE = 15,
+    PARAM_PANIC_SIZE = 16,
+    PARAM_PIO_BASE = 26,
+    PARAM_PIO_SIZE = 27,
+    PARAM_DEVICES_BASE = 28,
+    PARAM_DEVICES_SIZE = 29,
+    PARAM_TUNABLE_0_BASE = 30,
+    PARAM_TUNABLE_0_SIZE = 31,
+    PARAM_TUNABLE_1_BASE = 32,
+    PARAM_TUNABLE_1_SIZE = 33,
+    PARAM_PS_REGS_BASE = 36,
+    PARAM_PS_REGS_SIZE = 37,
+    PARAM_FORWARD_IRQS_BASE = 38,
+    PARAM_FORWARD_IRQS_SIZE = 39,
 } sio_param_id;
 
 typedef struct QEMU_PACKED sio_msg {
@@ -149,7 +149,7 @@ static void apple_sio_dma_writeback(AppleSIOState *s, AppleSIODMAEndpoint *ep)
     sio_msg m = { 0 };
 
     rtb = APPLE_RTBUDDY(s);
-    m.op = DMA_COMPLETE;
+    m.op = OP_DMA_COMPLETE;
     m.ep = ep->id;
     m.param = (1 << 7);
     m.tag = ep->tag;
@@ -205,14 +205,14 @@ static void apple_sio_control(AppleSIOState *s, AppleSIODMAEndpoint *ep,
     reply.ep = m.ep;
     reply.tag = m.tag;
     switch (m.op) {
-    case GET_PARAM: {
+    case OP_GET_PARAM: {
         reply.data = s->params[m.param];
-        reply.op = GET_PARAM_RETURN;
+        reply.op = OP_GET_PARAM_RETURN;
         break;
     }
-    case SET_PARAM: {
+    case OP_SET_PARAM: {
         s->params[m.param] = m.data;
-        reply.op = ACK;
+        reply.op = OP_ACK;
         break;
     }
     default:
@@ -230,25 +230,25 @@ static void apple_sio_dma(AppleSIOState *s, AppleSIODMAEndpoint *ep, sio_msg m)
     reply.ep = m.ep;
     reply.tag = m.tag;
     switch (m.op) {
-    case CONFIG_SHIM: {
+    case OP_CONFIG_SHIM: {
         dma_addr_t config_addr =
-            (s->params[DMA_SEGMENT_BASE] << 12) + m.data * 12;
+            (s->params[PARAM_DMA_SEGMENT_BASE] << 12) + m.data * 12;
         if (dma_memory_read(&s->dma_as, config_addr, &ep->config,
                             sizeof(ep->config),
                             MEMTXATTRS_UNSPECIFIED) != MEMTX_OK) {
             return;
         };
-        reply.op = ACK;
+        reply.op = OP_ACK;
         break;
     }
-    case START_DMA: {
+    case OP_START_DMA: {
         dma_addr_t handle_addr =
-            (s->params[DMA_SEGMENT_BASE] << 12) + m.data * 12;
+            (s->params[PARAM_DMA_SEGMENT_BASE] << 12) + m.data * 12;
         dma_addr_t seg_addr = handle_addr + 0x48;
         uint32_t segment_count = 0;
         if (ep->mapped) {
             qemu_log_mask(LOG_GUEST_ERROR, "SIO: Another DMA is running\n");
-            reply.op = ERROR;
+            reply.op = OP_ERROR;
             break;
         }
         if (dma_memory_read(&s->dma_as, handle_addr + 0x3C, &segment_count,
@@ -269,28 +269,28 @@ static void apple_sio_dma(AppleSIOState *s, AppleSIODMAEndpoint *ep, sio_msg m)
                             ep->segments[i].len);
         }
         apple_sio_map_dma(s, ep);
-        reply.op = ACK;
+        reply.op = OP_ACK;
         break;
     }
-    case QUERY_DMA:
+    case OP_QUERY_DMA:
         if (!ep->mapped) {
-            reply.op = ERROR;
+            reply.op = OP_ERROR;
             break;
         }
-        reply.op = QUERY_DMA_OK;
+        reply.op = OP_QUERY_DMA_OK;
         reply.data = ep->actual_length;
         break;
-    case STOP_DMA:
+    case OP_STOP_DMA:
         if (!ep->mapped) {
-            reply.op = ERROR;
+            reply.op = OP_ERROR;
             break;
         }
-        reply.op = ACK;
+        reply.op = OP_ACK;
         apple_sio_unmap_dma(s, ep);
         break;
     default:
         qemu_log_mask(LOG_UNIMP, "%s: Unknown SIO op: %d\n", __func__, m.op);
-        reply.op = ERROR;
+        reply.op = OP_ERROR;
         break;
     }
     apple_rtbuddy_send_user_msg(rtb, 0, reply.raw);
@@ -305,9 +305,9 @@ static void apple_sio_handle_endpoint(void *opaque, uint32_t ep, uint64_t msg)
     m.raw = msg;
 
     switch (m.ep) {
-    case CONTROL:
-    case PERF:
-        apple_sio_control(sio, &sio->eps[CONTROL], m);
+    case EP_CONTROL:
+    case EP_PERF:
+        apple_sio_control(sio, &sio->eps[EP_CONTROL], m);
         break;
     default:
         if (m.ep >= SIO_NUM_EPS) {
@@ -323,7 +323,7 @@ static void apple_sio_handle_endpoint(void *opaque, uint32_t ep, uint64_t msg)
 
 AppleSIODMAEndpoint *apple_sio_get_endpoint(AppleSIOState *s, int ep)
 {
-    if (ep <= PERF || ep >= SIO_NUM_EPS) {
+    if (ep <= EP_PERF || ep >= SIO_NUM_EPS) {
         return NULL;
     }
     return &s->eps[ep];
@@ -455,7 +455,7 @@ static void apple_sio_reset(DeviceState *dev)
     if (sioc->parent_reset) {
         sioc->parent_reset(dev);
     }
-    s->params[PROTOCOL] = 9;
+    s->params[PARAM_PROTOCOL] = 9;
     for (int i = 0; i < SIO_NUM_EPS; i++) {
         if (s->eps[i].mapped) {
             apple_sio_unmap_dma(s, &s->eps[i]);
