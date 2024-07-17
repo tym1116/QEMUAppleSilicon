@@ -964,58 +964,61 @@ static void t8030_pmgr_setup(MachineState *machine)
                                     t8030_machine->soc_base_pa + 0x3BC00000,
                                     mem);
     }
-    set_dtb_prop(child, "voltage-states5", sizeof(voltage_states5),
-                 voltage_states5);
-    set_dtb_prop(child, "voltage-states9-sram", sizeof(voltage_states9_sram),
-                 voltage_states9_sram);
-    set_dtb_prop(child, "voltage-states0", sizeof(voltage_states0),
-                 voltage_states0);
-    set_dtb_prop(child, "voltage-states9", sizeof(voltage_states9),
-                 voltage_states9);
-    set_dtb_prop(child, "voltage-states2", sizeof(voltage_states2),
-                 voltage_states2);
-    set_dtb_prop(child, "voltage-states1-sram", sizeof(voltage_states1_sram),
-                 voltage_states1_sram);
-    set_dtb_prop(child, "voltage-states10", sizeof(voltage_states10),
-                 voltage_states10);
-    set_dtb_prop(child, "voltage-states11", sizeof(voltage_states11),
-                 voltage_states11);
-    set_dtb_prop(child, "voltage-states8", sizeof(voltage_states8),
-                 voltage_states8);
-    set_dtb_prop(child, "voltage-states5-sram", sizeof(voltage_states5_sram),
-                 voltage_states5_sram);
-    set_dtb_prop(child, "voltage-states1", sizeof(voltage_states1),
-                 voltage_states1);
-    set_dtb_prop(child, "bridge-settings-17", sizeof(bridge_settings17),
-                 bridge_settings17);
-    set_dtb_prop(child, "bridge-settings-15", sizeof(bridge_settings15),
-                 bridge_settings15);
-    set_dtb_prop(child, "bridge-settings-13", sizeof(bridge_settings13),
-                 bridge_settings13);
-    set_dtb_prop(child, "bridge-settings-1", sizeof(bridge_settings1),
-                 bridge_settings1);
-    set_dtb_prop(child, "bridge-settings-5", sizeof(bridge_settings5),
-                 bridge_settings5);
-    set_dtb_prop(child, "bridge-settings-6", sizeof(bridge_settings6),
-                 bridge_settings6);
-    set_dtb_prop(child, "bridge-settings-2", sizeof(bridge_settings2),
-                 bridge_settings2);
-    set_dtb_prop(child, "bridge-settings-16", sizeof(bridge_settings16),
-                 bridge_settings16);
-    set_dtb_prop(child, "bridge-settings-14", sizeof(bridge_settings14),
-                 bridge_settings14);
-    set_dtb_prop(child, "bridge-settings-7", sizeof(bridge_settings7),
-                 bridge_settings7);
-    set_dtb_prop(child, "bridge-settings-12", sizeof(bridge_settings12),
-                 bridge_settings12);
-    set_dtb_prop(child, "bridge-settings-3", sizeof(bridge_settings3),
-                 bridge_settings3);
-    set_dtb_prop(child, "bridge-settings-8", sizeof(bridge_settings8),
-                 bridge_settings8);
-    set_dtb_prop(child, "bridge-settings-4", sizeof(bridge_settings4),
-                 bridge_settings4);
-    set_dtb_prop(child, "bridge-settings-0", sizeof(bridge_settings0),
-                 bridge_settings0);
+    set_dtb_prop(child, "voltage-states5", sizeof(t8030_voltage_states5),
+                 t8030_voltage_states5);
+    set_dtb_prop(child, "voltage-states9-sram",
+                 sizeof(t8030_voltage_states9_sram),
+                 t8030_voltage_states9_sram);
+    set_dtb_prop(child, "voltage-states0", sizeof(t8030_voltage_states0),
+                 t8030_voltage_states0);
+    set_dtb_prop(child, "voltage-states9", sizeof(t8030_voltage_states9),
+                 t8030_voltage_states9);
+    set_dtb_prop(child, "voltage-states2", sizeof(t8030_voltage_states2),
+                 t8030_voltage_states2);
+    set_dtb_prop(child, "voltage-states1-sram",
+                 sizeof(t8030_voltage_states1_sram),
+                 t8030_voltage_states1_sram);
+    set_dtb_prop(child, "voltage-states10", sizeof(t8030_voltage_states10),
+                 t8030_voltage_states10);
+    set_dtb_prop(child, "voltage-states11", sizeof(t8030_voltage_states11),
+                 t8030_voltage_states11);
+    set_dtb_prop(child, "voltage-states8", sizeof(t8030_voltage_states8),
+                 t8030_voltage_states8);
+    set_dtb_prop(child, "voltage-states5-sram",
+                 sizeof(t8030_voltage_states5_sram),
+                 t8030_voltage_states5_sram);
+    set_dtb_prop(child, "voltage-states1", sizeof(t8030_voltage_states1),
+                 t8030_voltage_states1);
+    set_dtb_prop(child, "bridge-settings-17", sizeof(t8030_bridge_settings17),
+                 t8030_bridge_settings17);
+    set_dtb_prop(child, "bridge-settings-15", sizeof(t8030_bridge_settings15),
+                 t8030_bridge_settings15);
+    set_dtb_prop(child, "bridge-settings-13", sizeof(t8030_bridge_settings13),
+                 t8030_bridge_settings13);
+    set_dtb_prop(child, "bridge-settings-1", sizeof(t8030_bridge_settings1),
+                 t8030_bridge_settings1);
+    set_dtb_prop(child, "bridge-settings-5", sizeof(t8030_bridge_settings5),
+                 t8030_bridge_settings5);
+    set_dtb_prop(child, "bridge-settings-6", sizeof(t8030_bridge_settings6),
+                 t8030_bridge_settings6);
+    set_dtb_prop(child, "bridge-settings-2", sizeof(t8030_bridge_settings2),
+                 t8030_bridge_settings2);
+    set_dtb_prop(child, "bridge-settings-16", sizeof(t8030_bridge_settings16),
+                 t8030_bridge_settings16);
+    set_dtb_prop(child, "bridge-settings-14", sizeof(t8030_bridge_settings14),
+                 t8030_bridge_settings14);
+    set_dtb_prop(child, "bridge-settings-7", sizeof(t8030_bridge_settings7),
+                 t8030_bridge_settings7);
+    set_dtb_prop(child, "bridge-settings-12", sizeof(t8030_bridge_settings12),
+                 t8030_bridge_settings12);
+    set_dtb_prop(child, "bridge-settings-3", sizeof(t8030_bridge_settings3),
+                 t8030_bridge_settings3);
+    set_dtb_prop(child, "bridge-settings-8", sizeof(t8030_bridge_settings8),
+                 t8030_bridge_settings8);
+    set_dtb_prop(child, "bridge-settings-4", sizeof(t8030_bridge_settings4),
+                 t8030_bridge_settings4);
+    set_dtb_prop(child, "bridge-settings-0", sizeof(t8030_bridge_settings0),
+                 t8030_bridge_settings0);
 }
 
 static void t8030_amcc_setup(MachineState *machine)
@@ -1304,8 +1307,8 @@ static void t8030_create_spi(MachineState *machine, uint32_t port)
     Object *sio;
     char name[32] = { 0 };
     hwaddr base = t8030_machine->soc_base_pa + T8030_SPI_BASE(port);
-    uint32_t irq = spi_irqs[port];
-    uint32_t cs_pin = spi_cs_pins[port];
+    uint32_t irq = t8030_spi_irqs[port];
+    uint32_t cs_pin = t8030_spi_cs_pins[port];
 
     g_assert_cmpuint(port, <, T8030_NUM_SPIS);
     snprintf(name, sizeof(name), "spi%d", port);
@@ -2100,7 +2103,8 @@ static void t8030_machine_init(MachineState *machine)
     data = 0x20;
     set_dtb_prop(child, "chip-revision", sizeof(data), &data);
 
-    set_dtb_prop(child, "clock-frequencies", sizeof(clock_freq), clock_freq);
+    set_dtb_prop(child, "clock-frequencies", sizeof(t8030_clock_freq),
+                 t8030_clock_freq);
 
     prop = find_dtb_prop(child, "ranges");
     g_assert_nonnull(prop);

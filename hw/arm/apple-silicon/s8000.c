@@ -665,8 +665,8 @@ static void s8000_pmgr_setup(MachineState *machine)
             mem, -1);
     }
 
-    set_dtb_prop(child, "voltage-states1", sizeof(voltage_states1),
-                 voltage_states1);
+    set_dtb_prop(child, "voltage-states1", sizeof(s8000_voltage_states1),
+                 s8000_voltage_states1);
 }
 
 static void s8000_create_nvme(MachineState *machine)
@@ -1233,8 +1233,8 @@ static void s8000_machine_init(MachineState *machine)
     data = 0x0;
     set_dtb_prop(child, "chip-revision", sizeof(data), &data);
 
-    set_dtb_prop(child, "clock-frequencies", sizeof(clock_frequencies),
-                 clock_frequencies);
+    set_dtb_prop(child, "clock-frequencies", sizeof(s8000_clock_frequencies),
+                 s8000_clock_frequencies);
 
     prop = find_dtb_prop(child, "ranges");
     g_assert_nonnull(prop);
