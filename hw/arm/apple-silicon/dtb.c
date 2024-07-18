@@ -23,6 +23,7 @@
 
 #include "qemu/osdep.h"
 #include "hw/arm/apple-silicon/dtb.h"
+#include "qemu/cutils.h"
 
 #define min(_a, _b) ((_a) < (_b) ? (_a) : (_b))
 
@@ -311,7 +312,7 @@ DTBNode *find_dtb_node(DTBNode *node, const char *path)
 
     g_assert(node && path);
 
-    while (node && found && ((next = strsep(&s, "/")))) {
+    while (node && found && ((next = qemu_strsep(&s, "/")))) {
         if (strlen(next) == 0) {
             continue;
         }
@@ -347,7 +348,7 @@ DTBNode *get_dtb_node(DTBNode *node, const char *path)
 
     g_assert(node && path);
 
-    while (node && ((name = strsep(&s, "/")))) {
+    while (node && ((name = qemu_strsep(&s, "/")))) {
         bool found = false;
         if (strlen(name) == 0) {
             continue;

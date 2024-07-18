@@ -28,6 +28,7 @@
 #include "hw/arm/apple-silicon/dtb.h"
 #include "hw/arm/apple-silicon/mem.h"
 #include "qapi/error.h"
+#include "qemu/cutils.h"
 #include "qemu/error-report.h"
 #include "qemu/guest-random.h"
 #include "img4.h"
@@ -710,7 +711,7 @@ bool xnu_contains_boot_arg(const char *bootArgs, const char *arg,
         return false;
     }
 
-    while ((token = strsep(&pos, " ")) != NULL) {
+    while ((token = qemu_strsep(&pos, " ")) != NULL) {
         if (prefixmatch && strncmp(token, arg, arglen) == 0) {
             return true;
         } else if (strcmp(token, arg) == 0) {
