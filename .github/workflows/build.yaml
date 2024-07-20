@@ -7,7 +7,7 @@ on:
 
 jobs:
   build_aarch64_softmmu_linux:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Install build dependencies
         run: |
@@ -66,7 +66,7 @@ jobs:
           path: ${{ github.workspace }}/bin/
 
   build_all_linux:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Install build dependencies
         run: |
