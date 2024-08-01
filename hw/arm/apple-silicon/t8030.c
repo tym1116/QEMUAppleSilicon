@@ -1967,7 +1967,7 @@ static void t8030_cpu_reset(void *opaque)
 
     CPU_FOREACH (cpu) {
         AppleA13State *tcpu = APPLE_A13(cpu);
-        if (tcpu == NULL) {
+        if (tcpu == NULL || tcpu->cpu_id == A13_MAX_CPU + 1) {
             continue;
         }
         object_property_set_uint(OBJECT(cpu), "rvbar",
