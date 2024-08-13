@@ -2140,9 +2140,12 @@ static void t8030_machine_init(MachineState *machine)
     // us to be using the SW renderer and messes up. also gives us an AGX
     // twiddled texture which we don't know how to handle yet.
     data = 0x8015;
-    set_dtb_prop(child, "chip-id", 4, &data);
+    set_dtb_prop(child, "chip-id", sizeof(data), &data);
     data = 0x4; // board-id ; match with apple_aes.c
-    set_dtb_prop(child, "board-id", 4, &data);
+    set_dtb_prop(child, "board-id", sizeof(data), &data);
+    data = 0x1;
+    set_dtb_prop(child, "certificate-production-status", sizeof(data), &data);
+    set_dtb_prop(child, "certificate-security-mode", sizeof(data), &data);
 
     if (t8030_machine->ecid == 0) {
         t8030_machine->ecid = 0x1122334455667788;
