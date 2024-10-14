@@ -1926,18 +1926,18 @@ static void t8030_create_sep_sim(MachineState *machine)
 
     dart = APPLE_DART(
         object_property_get_link(OBJECT(machine), "dart-sep", &error_fatal));
-    g_assert(dart);
+    g_assert_nonnull(dart);
     child = find_dtb_node(armio, "dart-sep");
-    g_assert(child);
+    g_assert_nonnull(child);
     child = find_dtb_node(child, "mapper-sep");
-    g_assert(child);
+    g_assert_nonnull(child);
     prop = find_dtb_prop(child, "reg");
-    g_assert(prop);
+    g_assert_nonnull(prop);
     sep->dma_mr =
         MEMORY_REGION(apple_dart_iommu_mr(dart, *(uint32_t *)prop->value));
-    g_assert(sep->dma_mr);
-    g_assert(object_property_add_const_link(OBJECT(sep), "dma-mr",
-                                            OBJECT(sep->dma_mr)));
+    g_assert_nonnull(sep->dma_mr);
+    g_assert_nonnull(object_property_add_const_link(OBJECT(sep), "dma-mr",
+                                                    OBJECT(sep->dma_mr)));
     sep->dma_as = g_new0(AddressSpace, 1);
     address_space_init(sep->dma_as, sep->dma_mr, "sep.dma");
 

@@ -168,11 +168,11 @@ AppleA9State *apple_a9_create(DTBNode *node, char *name, uint32_t cpu_id,
         dev->id = g_strdup((char *)prop->value);
 
         prop = find_dtb_prop(node, "cpu-id");
-        g_assert(prop->length == 4);
+        g_assert_cmpuint(prop->length, ==, 4);
         tcpu->cpu_id = *(unsigned int *)prop->value;
 
         prop = find_dtb_prop(node, "reg");
-        g_assert(prop->length == 4);
+        g_assert_cmpuint(prop->length, ==, 4);
         tcpu->phys_id = *(unsigned int *)prop->value;
     } else {
         dev->id = g_strdup(name);
@@ -238,7 +238,7 @@ AppleA9State *apple_a9_create(DTBNode *node, char *name, uint32_t cpu_id,
     if (node) {
         prop = find_dtb_prop(node, "cpu-impl-reg");
         if (prop) {
-            g_assert(prop->length == 16);
+            g_assert_cmpuint(prop->length, ==, 16);
 
             reg = (uint64_t *)prop->value;
 
@@ -251,7 +251,7 @@ AppleA9State *apple_a9_create(DTBNode *node, char *name, uint32_t cpu_id,
 
         prop = find_dtb_prop(node, "coresight-reg");
         if (prop) {
-            g_assert(prop->length == 16);
+            g_assert_cmpuint(prop->length, ==, 16);
 
             reg = (uint64_t *)prop->value;
 

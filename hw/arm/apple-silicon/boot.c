@@ -154,71 +154,63 @@ static void macho_dtb_node_process(DTBNode *node, DTBNode *parent)
     GList *iter = NULL;
     DTBNode *child = NULL;
     DTBProp *prop = NULL;
-    uint64_t i = 0;
+    uint64_t count;
+    uint64_t i;
+    bool found;
     int cnt;
 
-    // remove by compatible property
     prop = find_dtb_prop(node, "compatible");
-
-    if (prop) {
-        uint64_t count = sizeof(KEEP_COMP) / sizeof(KEEP_COMP[0]);
-        bool found = false;
-
-        for (i = 0; i < count; i++) {
-            uint64_t size = MIN(prop->length, sstrlen(KEEP_COMP[i]));
-            if (0 == memcmp(prop->value, KEEP_COMP[i], size)) {
+    if (prop != NULL) {
+        g_assert_nonnull(prop->value);
+        found = false;
+        for (count = sizeof(KEEP_COMP) / sizeof(KEEP_COMP[0]), i = 0; i < count;
+             i++) {
+            if (memcmp(prop->value, KEEP_COMP[i],
+                       MIN(prop->length, sstrlen(KEEP_COMP[i]))) == 0) {
                 found = true;
                 break;
             }
         }
-
         if (!found) {
-            if (parent) {
+            g_assert_nonnull(parent);
+            remove_dtb_node(parent, node);
+            return;
+        }
+    }
+
+    prop = find_dtb_prop(node, "name");
+    if (prop != NULL) {
+        g_assert_nonnull(prop->value);
+        for (count = sizeof(REM_NAMES) / sizeof(REM_NAMES[0]), i = 0; i < count;
+             i++) {
+            uint64_t size = MIN(prop->length, sstrlen(REM_NAMES[i]));
+            if (memcmp(prop->value, REM_NAMES[i], size) == 0) {
+                g_assert_nonnull(parent);
                 remove_dtb_node(parent, node);
                 return;
             }
         }
     }
 
-    /* remove by name property */
-    prop = find_dtb_prop(node, "name");
-    if (prop) {
-        uint64_t count = sizeof(REM_NAMES) / sizeof(REM_NAMES[0]);
-
-        for (i = 0; i < count; i++) {
-            uint64_t size = MIN(prop->length, sstrlen(REM_NAMES[i]));
-            if (!memcmp(prop->value, REM_NAMES[i], size)) {
-                if (parent) {
-                    remove_dtb_node(parent, node);
-                    return;
-                }
-                break;
-            }
-        }
-    }
-
-    /* remove dev type properties */
     prop = find_dtb_prop(node, "device_type");
-    if (prop) {
-        uint64_t count = sizeof(REM_DEV_TYPES) / sizeof(REM_DEV_TYPES[0]);
-        for (i = 0; i < count; i++) {
+    if (prop != NULL) {
+        g_assert_nonnull(prop->value);
+        for (count = sizeof(REM_DEV_TYPES) / sizeof(REM_DEV_TYPES[0]), i = 0;
+             i < count; i++) {
             uint64_t size = MIN(prop->length, sstrlen(REM_DEV_TYPES[i]));
-            if (!memcmp(prop->value, REM_DEV_TYPES[i], size)) {
-                // TODO: maybe remove the whole node and sub nodes?
-                overwrite_dtb_prop_val(prop, *(uint8_t *)"~");
-                break;
+            if (memcmp(prop->value, REM_DEV_TYPES[i], size) == 0) {
+                g_assert_nonnull(parent);
+                remove_dtb_node(parent, node);
+                return;
             }
         }
     }
 
-    {
-        uint64_t count = sizeof(REM_PROPS) / sizeof(REM_PROPS[0]);
-
-        for (i = 0; i < count; i++) {
-            prop = find_dtb_prop(node, REM_PROPS[i]);
-            if (prop) {
-                remove_dtb_prop(node, prop);
-            }
+    for (count = sizeof(REM_PROPS) / sizeof(REM_PROPS[0]), i = 0; i < count;
+         i++) {
+        prop = find_dtb_prop(node, REM_PROPS[i]);
+        if (prop != NULL) {
+            remove_dtb_prop(node, prop);
         }
     }
 
@@ -226,188 +218,169 @@ static void macho_dtb_node_process(DTBNode *node, DTBNode *parent)
     for (iter = node->child_nodes; iter != NULL;) {
         child = (DTBNode *)iter->data;
 
-        /* iter might be invalidated by macho_dtb_node_process */
+        // iter might be invalidated by macho_dtb_node_process
         iter = iter->next;
         macho_dtb_node_process(child, node);
         cnt--;
     }
 
-    g_assert(cnt == 0);
+    g_assert_cmpuint(cnt, ==, 0);
 }
 
 /*
- Extracts the payload from an im4p file. If the file is not an im4p file,
- the raw file contents are returned. Exits if an error occurs.
- See https://www.theiphonewiki.com/wiki/IMG4_File_Format for an overview
- of the file format.
-*/
-static void
-extract_im4p_payload(const char *filename,
-                     char *payload_type /* must be at least 4 bytes long */,
-                     uint8_t **data, uint32_t *length, uint8_t **secure_monitor)
+ * \param payload_type must be at least 4 bytes long
+ */
+static void extract_im4p_payload(const char *filename, char *payload_type,
+                                 uint8_t **data, uint32_t *length,
+                                 uint8_t **secure_monitor)
 {
-    uint8_t *file_data = NULL;
+    uint8_t *file_data;
     unsigned long fsize;
-
     char errorDescription[ASN1_MAX_ERROR_DESCRIPTION_SIZE];
     asn1_node img4_definitions = NULL;
     asn1_node img4;
     int ret;
+    char magic[4];
+    char description[128];
+    int len;
+    uint8_t *payload_data;
 
-    if (!g_file_get_contents(filename, (char **)&file_data, &fsize, NULL)) {
+    if (!g_file_get_contents(filename, (gchar **)&file_data, &fsize, NULL)) {
         error_report("Could not load data from file '%s'", filename);
         exit(EXIT_FAILURE);
     }
 
     if (asn1_array2tree(img4_definitions_array, &img4_definitions,
-                        errorDescription)) {
+                        errorDescription) != ASN1_SUCCESS) {
         error_report("Could not initialize the ASN.1 parser: %s.",
                      errorDescription);
         exit(EXIT_FAILURE);
     }
 
-    if ((ret = asn1_create_element(img4_definitions, "Img4.Img4Payload",
-                                   &img4) != ASN1_SUCCESS)) {
+    ret = asn1_create_element(img4_definitions, "Img4.Img4Payload", &img4);
+    if (ret != ASN1_SUCCESS) {
         error_report("Could not create an Img4Payload element: %d", ret);
         exit(EXIT_FAILURE);
     }
 
-    if ((ret = asn1_der_decoding(&img4, (const uint8_t *)file_data,
-                                 (uint32_t)fsize, errorDescription)) ==
-        ASN1_SUCCESS) {
-        char magic[4];
-        char description[128];
-        int len;
-        uint8_t *payload_data;
+    ret =
+        asn1_der_decoding(&img4, file_data, (uint32_t)fsize, errorDescription);
 
-        len = 4;
-        if ((ret = asn1_read_value(img4, "magic", magic, &len)) !=
-            ASN1_SUCCESS) {
-            error_report("Failed to read the im4p magic in file '%s': %d.",
-                         filename, ret);
+    if (ret != ASN1_SUCCESS) {
+        *data = file_data;
+        *length = (uint32_t)fsize;
+        strncpy(payload_type, "raw", 4);
+        asn1_delete_structure(&img4);
+        asn1_delete_structure(&img4_definitions);
+        return;
+    }
+
+    len = 4;
+    ret = asn1_read_value(img4, "magic", magic, &len);
+    if (ret != ASN1_SUCCESS) {
+        error_report("Failed to read the im4p magic in file '%s': %d.",
+                     filename, ret);
+        exit(EXIT_FAILURE);
+    }
+
+    if (strncmp(magic, "IM4P", 4) != 0) {
+        error_report("Couldn't parse ASN.1 data in file '%s' because it "
+                     "does not start with the IM4P header.",
+                     filename);
+        exit(EXIT_FAILURE);
+    }
+
+    len = 4;
+    ret = asn1_read_value(img4, "type", payload_type, &len);
+    if (ret != ASN1_SUCCESS) {
+        error_report("Failed to read the im4p type in file '%s': %d.", filename,
+                     ret);
+        exit(EXIT_FAILURE);
+    }
+
+    len = 128;
+    ret = asn1_read_value(img4, "description", description, &len);
+    if (ret != ASN1_SUCCESS) {
+        error_report("Failed to read the im4p description in file '%s': %d.",
+                     filename, ret);
+        exit(EXIT_FAILURE);
+    }
+
+    payload_data = NULL;
+    len = 0;
+    ret = asn1_read_value(img4, "data", payload_data, &len);
+    if (ret != ASN1_MEM_ERROR) {
+        error_report("Failed to read the im4p payload in file '%s': %d.",
+                     filename, ret);
+        exit(EXIT_FAILURE);
+    }
+
+    payload_data = g_malloc0(len);
+    ret = asn1_read_value(img4, "data", payload_data, &len);
+    g_free(file_data);
+
+    if (ret != ASN1_SUCCESS) {
+        error_report("Failed to read the im4p payload in file '%s': %d.",
+                     filename, ret);
+        exit(EXIT_FAILURE);
+    }
+
+    asn1_delete_structure(&img4);
+    asn1_delete_structure(&img4_definitions);
+
+    if (memcmp(payload_data, "bvx", 3) == 0) {
+        size_t decode_buffer_size = len * 8;
+        uint8_t *decode_buffer = g_malloc0(decode_buffer_size);
+        int decoded_length =
+            lzfse_decode_buffer(decode_buffer, decode_buffer_size, payload_data,
+                                len, NULL /* scratch_buffer */);
+        g_free(payload_data);
+
+        if (decoded_length == 0 || decoded_length == decode_buffer_size) {
+            error_report(
+                "Could not decompress LZFSE-compressed data in file '%s' "
+                "because the decode buffer was too small.",
+                filename);
             exit(EXIT_FAILURE);
         }
 
-        if (strncmp(magic, "IM4P", 4) != 0) {
-            error_report("Couldn't parse ASN.1 data in file '%s' because it "
-                         "does not start with the IM4P header.",
+        *data = decode_buffer;
+        *length = decoded_length;
+        return;
+    }
+
+    if (memcmp(payload_data, "complzss", 8) == 0) {
+        LzssCompHeader *comp_hdr = (LzssCompHeader *)payload_data;
+        size_t uncompressed_size = be32_to_cpu(comp_hdr->uncompressed_size);
+        size_t compressed_size = be32_to_cpu(comp_hdr->compressed_size);
+        uint8_t *decode_buffer = g_malloc0(uncompressed_size);
+        int decoded_length =
+            decompress_lzss(decode_buffer, comp_hdr->data, compressed_size);
+        if (decoded_length == 0 || decoded_length != uncompressed_size) {
+            error_report("Could not decompress LZSS-compressed data in "
+                         "file '%s' correctly.",
                          filename);
             exit(EXIT_FAILURE);
         }
 
-        len = 4;
-        if ((ret = asn1_read_value(img4, "type", payload_type, &len)) !=
-            ASN1_SUCCESS) {
-            error_report("Failed to read the im4p type in file '%s': %d.",
-                         filename, ret);
-            exit(EXIT_FAILURE);
+        size_t monitor_off = compressed_size + sizeof(LzssCompHeader);
+        if (secure_monitor && monitor_off < len) {
+            size_t monitor_size = len - monitor_off;
+            info_report("Found AP Secure Monitor in payload with size 0x%zX!",
+                        monitor_size);
+            *secure_monitor = g_malloc0(monitor_size);
+            memcpy(*secure_monitor, payload_data + monitor_off, monitor_size);
         }
 
-        len = 128;
-        if ((ret = asn1_read_value(img4, "description", description, &len)) !=
-            ASN1_SUCCESS) {
-            error_report(
-                "Failed to read the im4p description in file '%s': %d.",
-                filename, ret);
-            exit(EXIT_FAILURE);
-        }
+        g_free(payload_data);
 
-        payload_data = NULL;
-        len = 0;
-
-        if ((ret = asn1_read_value(img4, "data", payload_data, &len) !=
-                   ASN1_MEM_ERROR)) {
-            error_report("Failed to read the im4p payload in file '%s': %d.",
-                         filename, ret);
-            exit(EXIT_FAILURE);
-        }
-
-        payload_data = g_malloc0(len);
-
-        if ((ret = asn1_read_value(img4, "data", payload_data, &len) !=
-                   ASN1_SUCCESS)) {
-            error_report("Failed to read the im4p payload in file '%s': %d.",
-                         filename, ret);
-            exit(EXIT_FAILURE);
-        }
-
-        // Determine whether the payload is LZFSE-compressed: LZFSE-compressed
-        // files contains various buffer blocks, and each buffer block starts
-        // with bvx? magic, where ? is -, 1, 2 or n. See
-        // https://github.com/lzfse/lzfse/blob/e634ca58b4821d9f3d560cdc6df5dec02ffc93fd/src/lzfse_internal.h
-        // for the details
-        if (payload_data[0] == (uint8_t)'b' &&
-            payload_data[1] == (uint8_t)'v' &&
-            payload_data[2] == (uint8_t)'x') {
-            size_t decode_buffer_size = len * 8;
-            uint8_t *decode_buffer = g_malloc0(decode_buffer_size);
-            int decoded_length = lzfse_decode_buffer(
-                decode_buffer, decode_buffer_size, payload_data, len,
-                NULL /* scratch_buffer */);
-
-            if (decoded_length == 0 || decoded_length == decode_buffer_size) {
-                error_report(
-                    "Could not decompress LZFSE-compressed data in file '%s' "
-                    "because the decode buffer was too small.",
-                    filename);
-                exit(EXIT_FAILURE);
-            }
-
-            *data = decode_buffer;
-            *length = decoded_length;
-
-            g_free(payload_data);
-            g_free(file_data);
-        } else if (payload_data[0] == (uint8_t)'c' &&
-                   payload_data[1] == (uint8_t)'o' &&
-                   payload_data[2] == (uint8_t)'m' &&
-                   payload_data[3] == (uint8_t)'p' &&
-                   payload_data[4] == (uint8_t)'l' &&
-                   payload_data[5] == (uint8_t)'z' &&
-                   payload_data[6] == (uint8_t)'s' &&
-                   payload_data[7] == (uint8_t)'s') {
-            LzssCompHeader *comp_hdr = (LzssCompHeader *)payload_data;
-            size_t uncompressed_size = be32_to_cpu(comp_hdr->uncompressed_size);
-            size_t compressed_size = be32_to_cpu(comp_hdr->compressed_size);
-            uint8_t *decode_buffer = g_malloc0(uncompressed_size);
-            int decoded_length =
-                decompress_lzss(decode_buffer, comp_hdr->data, compressed_size);
-            if (decoded_length == 0 || decoded_length != uncompressed_size) {
-                error_report("Could not decompress LZSS-compressed data in "
-                             "file '%s' correctly.",
-                             filename);
-                exit(EXIT_FAILURE);
-            }
-
-            size_t monitor_off = compressed_size + sizeof(LzssCompHeader);
-            if (secure_monitor && monitor_off < len) {
-                size_t monitor_size = len - monitor_off;
-                info_report("Secure monitor in payload detected, size 0x%zX!",
-                            monitor_size);
-                uint8_t *monitor = g_malloc0(monitor_size);
-                memcpy(monitor,
-                       payload_data +
-                           (compressed_size + sizeof(LzssCompHeader)),
-                       monitor_size);
-                *secure_monitor = monitor;
-            }
-
-            *data = decode_buffer;
-            *length = decoded_length;
-
-            g_free(payload_data);
-            g_free(file_data);
-        } else {
-            *data = payload_data;
-            *length = len;
-
-            g_free(file_data);
-        }
-    } else {
-        *data = file_data;
-        *length = (uint32_t)fsize;
-        strncpy(payload_type, "raw", 4);
+        *data = decode_buffer;
+        *length = decoded_length;
+        return;
     }
+
+    *data = payload_data;
+    *length = len;
 }
 
 DTBNode *load_dtb_from_file(char *filename)
@@ -429,7 +402,6 @@ DTBNode *load_dtb_from_file(char *filename)
 
     root = load_dtb(file_data);
     g_free(file_data);
-
     return root;
 }
 
@@ -451,6 +423,8 @@ void macho_populate_dtb(DTBNode *root, AppleBootInfo *info)
     set_dtb_prop(child, "firmware-version", 28, "ChefKiss QEMU Apple Silicon");
 
     if (info->nvram_size > XNU_MAX_NVRAM_SIZE) {
+        warn_report("NVRAM size is larger than expected. (%llX vs %X)",
+                    info->nvram_size, XNU_MAX_NVRAM_SIZE);
         info->nvram_size = XNU_MAX_NVRAM_SIZE;
     }
     set_dtb_prop(child, "nvram-total-size", 4, &info->nvram_size);
@@ -462,7 +436,6 @@ void macho_populate_dtb(DTBNode *root, AppleBootInfo *info)
     prop = set_dtb_prop(child, "effective-production-status-ap", sizeof(data),
                         &data);
 
-    // These are needed by the image4 parser
     set_dtb_prop(child, "security-domain", sizeof(data), &data);
     set_dtb_prop(child, "chip-epoch", sizeof(data), &data);
     set_dtb_prop(child, "amfi-allows-trust-cache-load", sizeof(data), &data);
@@ -495,14 +468,14 @@ static void set_memory_range(DTBNode *root, const char *name, uint64_t addr,
     DTBNode *child;
     DTBProp *prop;
 
-    g_assert(addr);
-    g_assert(size);
+    g_assert_cmphex(addr, !=, 0);
+    g_assert_cmpuint(size, !=, 0);
 
     child = get_dtb_node(root, "chosen/memory-map");
-    g_assert(child);
+    g_assert_nonnull(child);
 
     prop = find_dtb_prop(child, name);
-    g_assert(prop);
+    g_assert_nonnull(prop);
 
     ((uint64_t *)prop->value)[0] = addr;
     ((uint64_t *)prop->value)[1] = size;
@@ -514,11 +487,10 @@ static void remove_memory_range(DTBNode *root, const char *name)
     DTBProp *prop;
 
     child = get_dtb_node(root, "chosen/memory-map");
-    g_assert(child);
+    g_assert_nonnull(child);
 
     prop = find_dtb_prop(child, "DeviceTree");
-
-    if (prop) {
+    if (prop != NULL) {
         remove_dtb_prop(child, prop);
     }
 }
@@ -565,18 +537,19 @@ void macho_load_dtb(DTBNode *root, AddressSpace *as, MemoryRegion *mem,
         }
 
         prop = find_dtb_prop(child, "boot-manifest-hash");
-        g_assert(prop);
+        g_assert_nonnull(prop);
 
         if (qcrypto_hash_bytes(alg, info->ticket_data, info->ticket_length,
                                &hash, &hash_len, &err) >= 0) {
-            g_assert(hash_len == prop->length);
+            g_assert_cmpuint(hash_len, ==, prop->length);
             memcpy(prop->value, hash, hash_len);
         } else {
             error_report_err(err);
         }
     }
 
-    g_assert(info->device_tree_size >= get_dtb_node_buffer_size(root));
+    g_assert_cmpuint(info->device_tree_size, >=,
+                     get_dtb_node_buffer_size(root));
     buf = g_malloc0(info->device_tree_size);
     save_dtb(buf, root);
     allocate_and_copy(mem, as, name, info->device_tree_addr,
@@ -879,7 +852,7 @@ MachoHeader64 *macho_parse(uint8_t *data, uint32_t len)
     }
 
     macho_highest_lowest(mh, &lowaddr, &highaddr);
-    g_assert(lowaddr < highaddr);
+    g_assert_cmphex(lowaddr, <, highaddr);
 
     phys_base = g_malloc0(highaddr - lowaddr);
     virt_base = lowaddr;
@@ -895,7 +868,7 @@ MachoHeader64 *macho_parse(uint8_t *data, uint32_t len)
             if (segCmd->vmsize == 0) {
                 break;
             }
-            g_assert(segCmd->fileoff < len);
+            g_assert_cmphex(segCmd->fileoff, <, len);
             if (segCmd->vmaddr && segCmd->fileoff == 0 && !text_base) {
                 text_base = segCmd->vmaddr;
             }
@@ -1215,7 +1188,7 @@ hwaddr arm_load_macho(MachoHeader64 *mh, AddressSpace *as, MemoryRegion *mem,
                 if (strcmp(segCmd->segname, "__TEXT") == 0) {
                     MachoHeader64 *mh = load_from;
                     MachoSegmentCommand64 *seg;
-                    g_assert(mh->magic == MACH_MAGIC_64);
+                    g_assert_cmphex(mh->magic, ==, MACH_MAGIC_64);
                     for (seg = macho_get_firstseg(mh); seg != NULL;
                          seg = macho_get_nextseg(mh, seg)) {
                         MachoSection64 *sp;

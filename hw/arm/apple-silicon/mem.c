@@ -27,14 +27,16 @@ hwaddr g_virt_base, g_phys_base, g_virt_slide, g_phys_slide;
 
 hwaddr vtop_bases(hwaddr va, hwaddr phys_base, hwaddr virt_base)
 {
-    g_assert(phys_base && virt_base);
+    g_assert_cmphex(phys_base, !=, 0);
+    g_assert_cmphex(virt_base, !=, 0);
 
     return va - virt_base + phys_base;
 }
 
 hwaddr ptov_bases(hwaddr pa, hwaddr phys_base, hwaddr virt_base)
 {
-    g_assert(phys_base && virt_base);
+    g_assert_cmphex(phys_base, !=, 0);
+    g_assert_cmphex(virt_base, !=, 0);
 
     return pa - phys_base + virt_base;
 }
@@ -51,14 +53,16 @@ hwaddr ptov_static(hwaddr pa)
 
 uint8_t get_highest_different_bit_index(hwaddr addr1, hwaddr addr2)
 {
-    g_assert(addr1 && addr2 && addr1 != addr2);
+    g_assert_cmphex(addr1, !=, 0);
+    g_assert_cmphex(addr2, !=, 0);
+    g_assert_cmphex(addr1, !=, addr2);
 
     return 64 - __builtin_clzll(addr1 ^ addr2);
 }
 
 hwaddr align_16k_low(hwaddr addr)
 {
-    return addr & ~0x3fffull;
+    return addr & ~0x3FFFull;
 }
 
 hwaddr align_16k_high(hwaddr addr)
@@ -73,14 +77,14 @@ hwaddr align_up(hwaddr addr, hwaddr alignment)
 
 uint8_t get_lowest_non_zero_bit_index(hwaddr addr)
 {
-    g_assert(addr);
+    g_assert_cmphex(addr, !=, 0);
 
     return __builtin_ctzll(addr);
 }
 
 hwaddr get_low_bits_mask_for_bit_index(uint8_t bit_index)
 {
-    g_assert(bit_index < 64);
+    g_assert_cmphex(bit_index, <, 64);
 
     return (1 << bit_index) - 1;
 }
@@ -89,6 +93,7 @@ void allocate_ram(MemoryRegion *top, const char *name, hwaddr addr, hwaddr size,
                   int priority)
 {
     MemoryRegion *sec = g_new(MemoryRegion, 1);
+    g_assert_nonnull(sec);
     memory_region_init_ram(sec, NULL, name, size, &error_fatal);
     memory_region_add_subregion_overlap(top, addr, sec, priority);
 }

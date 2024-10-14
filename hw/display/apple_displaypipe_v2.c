@@ -388,18 +388,20 @@ AppleDisplayPipeV2State *apple_displaypipe_v2_create(MachineState *machine,
     sbd = SYS_BUS_DEVICE(dev);
     s = APPLE_DISPLAYPIPE_V2(sbd);
 
-    g_assert(set_dtb_prop(node, "display-target", 15, "DisplayTarget5"));
+    g_assert_nonnull(
+        set_dtb_prop(node, "display-target", 15, "DisplayTarget5"));
     uint32_t dispTimingInfo[] = { 0x33C, 0x90, 0x1, 0x1, 0x700, 0x1, 0x1, 0x1 };
-    g_assert(set_dtb_prop(node, "display-timing-info", sizeof(dispTimingInfo),
-                          &dispTimingInfo));
+    g_assert_nonnull(set_dtb_prop(node, "display-timing-info",
+                                  sizeof(dispTimingInfo), &dispTimingInfo));
     uint32_t data = 0xD;
-    g_assert(set_dtb_prop(node, "bics-param-set", sizeof(data), &data));
+    g_assert_nonnull(set_dtb_prop(node, "bics-param-set", sizeof(data), &data));
     uint32_t dot_pitch = 326;
-    g_assert(set_dtb_prop(node, "dot-pitch", sizeof(dot_pitch), &dot_pitch));
-    g_assert(set_dtb_prop(node, "function-brightness_update", 0, ""));
+    g_assert_nonnull(
+        set_dtb_prop(node, "dot-pitch", sizeof(dot_pitch), &dot_pitch));
+    g_assert_nonnull(set_dtb_prop(node, "function-brightness_update", 0, ""));
 
     DTBProp *prop = find_dtb_prop(node, "reg");
-    g_assert(prop);
+    g_assert_nonnull(prop);
     uint64_t *reg = (uint64_t *)prop->value;
     memory_region_init_io(&s->up_regs, OBJECT(sbd), &apple_disp_v2_reg_ops, sbd,
                           "up.regs", reg[1]);

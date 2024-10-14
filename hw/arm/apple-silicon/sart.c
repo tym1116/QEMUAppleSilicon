@@ -47,7 +47,7 @@ static inline uint64_t sart_get_reg(AppleSARTState *s, uint32_t offset)
 
 static inline hwaddr sart_get_region_addr(AppleSARTState *s, int region)
 {
-    g_assert(region < SART_NUM_REGIONS);
+    g_assert_cmpuint(region, <, SART_NUM_REGIONS);
 
     switch (s->version) {
     case 1:
@@ -63,7 +63,7 @@ static inline hwaddr sart_get_region_addr(AppleSARTState *s, int region)
 
 static inline uint64_t sart_get_region_size(AppleSARTState *s, int region)
 {
-    g_assert(region < SART_NUM_REGIONS);
+    g_assert_cmpuint(region, <, SART_NUM_REGIONS);
 
     switch (s->version) {
     case 1:
@@ -80,7 +80,7 @@ static inline uint64_t sart_get_region_size(AppleSARTState *s, int region)
 
 static inline uint32_t sart_get_region_flags(AppleSARTState *s, int region)
 {
-    g_assert(region < SART_NUM_REGIONS);
+    g_assert_cmpuint(region, <, SART_NUM_REGIONS);
 
     switch (s->version) {
     case 1:
@@ -199,12 +199,13 @@ SysBusDevice *apple_sart_create(DTBNode *node)
     dev->id = g_strdup((const char *)prop->value);
 
     prop = find_dtb_prop(node, "sart-version");
-    g_assert(prop);
+    g_assert_nonnull(prop);
     s->version = *(uint32_t *)prop->value;
-    g_assert(s->version >= 1 && s->version <= 3);
+    g_assert_cmpuint(s->version, >=, 1);
+    g_assert_cmpuint(s->version, <=, 3);
 
     prop = find_dtb_prop(node, "reg");
-    g_assert(prop);
+    g_assert_nonnull(prop);
 
     reg = (uint64_t *)prop->value;
     memory_region_init_io(&s->iomem, OBJECT(dev), &base_reg_ops, s,

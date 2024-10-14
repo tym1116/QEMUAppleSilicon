@@ -425,7 +425,7 @@ static uint64_t apple_a13_ipi_read_sr(CPUARMState *env, const ARMCPRegInfo *ri)
 {
     AppleA13State *tcpu = APPLE_A13(env_archcpu(env));
 
-    g_assert(env_archcpu(env)->mp_affinity == tcpu->mpidr);
+    g_assert_cmphex(env_archcpu(env)->mp_affinity, ==, tcpu->mpidr);
     return tcpu->ipi_sr;
 }
 
@@ -654,15 +654,15 @@ AppleA13State *apple_a13_cpu_create(DTBNode *node, char *name, uint32_t cpu_id,
         dev->id = g_strdup((char *)prop->value);
 
         prop = find_dtb_prop(node, "cpu-id");
-        g_assert(prop->length == 4);
+        g_assert_cmpuint(prop->length, ==, 4);
         tcpu->cpu_id = *(unsigned int *)prop->value;
 
         prop = find_dtb_prop(node, "reg");
-        g_assert(prop->length == 4);
+        g_assert_cmpuint(prop->length, ==, 4);
         tcpu->phys_id = *(unsigned int *)prop->value;
 
         prop = find_dtb_prop(node, "cluster-id");
-        g_assert(prop->length == 4);
+        g_assert_cmpuint(prop->length, ==, 4);
         tcpu->cluster_id = *(unsigned int *)prop->value;
     } else {
         dev->id = g_strdup(name);
@@ -744,7 +744,7 @@ AppleA13State *apple_a13_cpu_create(DTBNode *node, char *name, uint32_t cpu_id,
     if (node) {
         prop = find_dtb_prop(node, "cpu-impl-reg");
         if (prop) {
-            g_assert(prop->length == 16);
+            g_assert_cmpuint(prop->length, ==, 16);
 
             reg = (uint64_t *)prop->value;
 
@@ -757,7 +757,7 @@ AppleA13State *apple_a13_cpu_create(DTBNode *node, char *name, uint32_t cpu_id,
 
         prop = find_dtb_prop(node, "coresight-reg");
         if (prop) {
-            g_assert(prop->length == 16);
+            g_assert_cmpuint(prop->length, ==, 16);
 
             reg = (uint64_t *)prop->value;
 
@@ -770,7 +770,7 @@ AppleA13State *apple_a13_cpu_create(DTBNode *node, char *name, uint32_t cpu_id,
 
         prop = find_dtb_prop(node, "cpm-impl-reg");
         if (prop) {
-            g_assert(prop->length == 16);
+            g_assert_cmpuint(prop->length, ==, 16);
             memcpy(tcpu->cluster_reg, prop->value, 16);
         }
     }

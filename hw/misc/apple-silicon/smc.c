@@ -498,10 +498,10 @@ SysBusDevice *apple_smc_create(DTBNode *node, AppleA7IOPVersion version,
     sbd = SYS_BUS_DEVICE(dev);
 
     child = find_dtb_node(node, "iop-smc-nub");
-    g_assert(child);
+    g_assert_nonnull(child);
 
     prop = find_dtb_prop(node, "reg");
-    g_assert(prop);
+    g_assert_nonnull(prop);
 
     reg = (uint64_t *)prop->value;
 
@@ -516,8 +516,8 @@ SysBusDevice *apple_smc_create(DTBNode *node, AppleA7IOPVersion version,
     sysbus_init_mmio(sbd, s->iomems[1]);
 
     prop = find_dtb_prop(child, "sram-addr");
-    g_assert(prop != NULL);
-    g_assert(prop->length == 8);
+    g_assert_nonnull(prop);
+    g_assert_cmpuint(prop->length, ==, 8);
 
     s->sram_addr = *(uint64_t *)prop->value;
     s->iomems[2] = g_new(MemoryRegion, 1);

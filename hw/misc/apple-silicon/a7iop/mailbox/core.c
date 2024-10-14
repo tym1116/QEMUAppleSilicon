@@ -106,7 +106,7 @@ bool apple_a7iop_mailbox_is_empty(AppleA7IOPMailbox *s)
 static void apple_a7iop_mailbox_send(AppleA7IOPMailbox *s,
                                      AppleA7IOPMessage *msg)
 {
-    g_assert(msg);
+    g_assert_nonnull(msg);
 
     QEMU_LOCK_GUARD(&s->lock);
     trace_apple_a7iop_mailbox_send(s->role, msg->endpoint, msg->data[0],
@@ -335,7 +335,7 @@ static void apple_a7iop_mailbox_reset(DeviceState *dev)
 
     s = APPLE_A7IOP_MAILBOX(dev);
 
-    g_assert(s->iop_mailbox != s->ap_mailbox);
+    g_assert_true(s->iop_mailbox != s->ap_mailbox);
     QEMU_LOCK_GUARD(&s->lock);
     s->count = 0;
     s->iop_dir_en = true;

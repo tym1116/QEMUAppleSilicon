@@ -1005,7 +1005,7 @@ static void s8000_create_sep(MachineState *machine)
             qdev_get_gpio_in(DEVICE(s8000_machine->aic), ints[i]));
     }
 
-    g_assert(object_property_add_const_link(
+    g_assert_nonnull(object_property_add_const_link(
         OBJECT(s8000_machine->sep), "dma-mr", OBJECT(s8000_machine->sysmem)));
 
     sysbus_realize_and_unref(SYS_BUS_DEVICE(s8000_machine->sep), &error_fatal);

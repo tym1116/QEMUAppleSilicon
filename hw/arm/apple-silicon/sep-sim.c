@@ -251,28 +251,28 @@ enum {
 static void apple_sep_sim_set_ool_in_size(AppleSEPSimState *s, uint8_t ep,
                                           uint32_t size)
 {
-    g_assert(ep < SEP_ENDPOINT_MAX);
+    g_assert_cmpuint(ep, <, SEP_ENDPOINT_MAX);
     s->ool_state[ep].in_size = size;
 }
 
 static void apple_sep_sim_set_ool_in_addr(AppleSEPSimState *s, uint8_t ep,
                                           uint64_t addr)
 {
-    g_assert(ep < SEP_ENDPOINT_MAX);
+    g_assert_cmpuint(ep, <, SEP_ENDPOINT_MAX);
     s->ool_state[ep].in_addr = addr;
 }
 
 static void apple_sep_sim_set_ool_out_size(AppleSEPSimState *s, uint8_t ep,
                                            uint32_t size)
 {
-    g_assert(ep < SEP_ENDPOINT_MAX);
+    g_assert_cmpuint(ep, <, SEP_ENDPOINT_MAX);
     s->ool_state[ep].out_size = size;
 }
 
 static void apple_sep_sim_set_ool_out_addr(AppleSEPSimState *s, uint8_t ep,
                                            uint64_t addr)
 {
-    g_assert(ep < SEP_ENDPOINT_MAX);
+    g_assert_cmpuint(ep, <, SEP_ENDPOINT_MAX);
     s->ool_state[ep].out_addr = addr;
 }
 
@@ -367,11 +367,12 @@ static void apple_sep_sim_handle_control_msg(AppleSEPSimState *s,
 
         char error_desc[ASN1_MAX_ERROR_DESCRIPTION_SIZE];
         asn1_node art_defs = NULL;
-        g_assert(asn1_array2tree(art_definitions_array, &art_defs,
-                                 error_desc) == ASN1_SUCCESS);
+        g_assert_cmpuint(
+            asn1_array2tree(art_definitions_array, &art_defs, error_desc), ==,
+            ASN1_SUCCESS);
         asn1_node art = NULL;
-        g_assert(asn1_create_element(art_defs, "ART.Header", &art) ==
-                 ASN1_SUCCESS);
+        g_assert_cmpuint(asn1_create_element(art_defs, "ART.Header", &art), ==,
+                         ASN1_SUCCESS);
         uint8_t val = 0;
         asn1_write_value(art, "Version", &val, sizeof(val));
         uint16_t val16 = 0;
@@ -384,8 +385,8 @@ static void apple_sep_sim_handle_control_msg(AppleSEPSimState *s,
         asn1_write_value(art, "InfoHMAC", byte0x20, sizeof(byte0x20));
         char data[512];
         int data_len = sizeof(data);
-        g_assert(asn1_der_coding(art, "", data, &data_len, error_desc) ==
-                 ASN1_SUCCESS);
+        g_assert_cmpuint(asn1_der_coding(art, "", data, &data_len, error_desc),
+                         ==, ASN1_SUCCESS);
         asn1_delete_structure(&art);
         asn1_delete_structure(&art_defs);
 
@@ -546,7 +547,7 @@ static void apple_sep_sim_handle_bootstrap_msg(AppleSEPSimState *s,
     case BOOTSTRAP_OP_BOOT_IMG4: {
         qemu_log_mask(LOG_GUEST_ERROR, "EP_BOOTSTRAP: BOOT_IMG4\n");
 
-        g_assert(s->rsep == (msg->param == 1));
+        g_assert_true(s->rsep == (msg->param == 1));
 
         apple_sep_sim_send_message(s, EP_BOOTSTRAP, msg->tag,
                                    BOOTSTRAP_OP_IMG4_ACCEPTED, 0, 0);
@@ -579,14 +580,15 @@ static uint8_t *apple_sep_sim_gen_sks_hash(uint8_t *buf,
             .iov_len = msg_size - KEYSTORE_IPC_HEADER_SIZE,
         },
     };
-    g_assert(qcrypto_hash_supports(QCRYPTO_HASH_ALG_SHA256));
+    g_assert_true(qcrypto_hash_supports(QCRYPTO_HASH_ALG_SHA256));
     uint8_t *hash = NULL;
     size_t hash_len = 0;
-    g_assert(qcrypto_hash_bytesv(QCRYPTO_HASH_ALG_SHA256, iov,
-                                 sizeof(iov) / sizeof(*iov), &hash, &hash_len,
-                                 &error_fatal) == 0);
-    g_assert(hash);
-    g_assert(hash_len == 32);
+    g_assert_cmpuint(qcrypto_hash_bytesv(QCRYPTO_HASH_ALG_SHA256, iov,
+                                         sizeof(iov) / sizeof(*iov), &hash,
+                                         &hash_len, &error_fatal),
+                     ==, 0);
+    g_assert_nonnull(hash);
+    g_assert_cmpuint(hash_len, ==, 32);
     return hash;
 }
 
@@ -1007,7 +1009,7 @@ AppleSEPSimState *apple_sep_sim_create(DTBNode *node, bool modern)
     s = APPLE_SEP_SIM(dev);
 
     prop = find_dtb_prop(node, "reg");
-    g_assert(prop);
+    g_assert_nonnull(prop);
     reg = (uint64_t *)prop->value;
 
     apple_a7iop_init(a7iop, "SEP", reg[1],
@@ -1017,7 +1019,7 @@ AppleSEPSimState *apple_sep_sim_create(DTBNode *node, bool modern)
     qemu_mutex_init(&s->lock);
 
     child = find_dtb_node(node, "iop-sep-nub");
-    g_assert(child);
+    g_assert_nonnull(child);
     remove_dtb_node_by_name(child, "Lynx");
     return s;
 }

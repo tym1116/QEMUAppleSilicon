@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2019 Jonathan Afek <jonyafek@me.com>
+ * Copyright (c) 2024 Visual Ehrmanntraut (VisualEhrmanntraut).
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -26,7 +27,7 @@
 #include "qemu/osdep.h"
 
 #define DT_PROP_FLAG_PLACEHOLDER (1 << 31)
-#define DT_PROP_FLAGS_MASK (0xf0000000)
+#define DT_PROP_FLAGS_MASK (0xF0000000)
 #define DT_PROP_SIZE_MASK (~DT_PROP_FLAGS_MASK)
 
 #define DTB_PROP_NAME_LEN (32)
@@ -56,7 +57,5 @@ DTBNode *find_dtb_node(DTBNode *n, const char *path);
 DTBNode *get_dtb_node(DTBNode *n, const char *path);
 uint64_t get_dtb_node_buffer_size(DTBNode *node);
 DTBProp *find_dtb_prop(DTBNode *node, const char *name);
-void overwrite_dtb_prop_val(DTBProp *prop, uint8_t chr);
-void overwrite_dtb_prop_name(DTBProp *prop, uint8_t chr);
 
 #endif /* HW_ARM_APPLE_SILICON_DTB_H */

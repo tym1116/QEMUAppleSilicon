@@ -276,7 +276,7 @@ AppleSEPState *apple_sep_create(DTBNode *node, MemoryRegion *ool_mr, vaddr base,
     sbd = SYS_BUS_DEVICE(dev);
 
     prop = find_dtb_prop(node, "reg");
-    g_assert(prop);
+    g_assert_nonnull(prop);
     reg = (uint64_t *)prop->value;
 
     apple_a7iop_init(a7iop, "SEP", reg[1],
@@ -308,14 +308,14 @@ AppleSEPState *apple_sep_create(DTBNode *node, MemoryRegion *ool_mr, vaddr base,
                           "sep.misc2", 0x100);
     sysbus_init_mmio(sbd, &s->misc2_mr);
     DTBNode *child = find_dtb_node(node, "iop-sep-nub");
-    g_assert(child);
+    g_assert_nonnull(child);
 
     s->ool_mr = ool_mr;
-    g_assert(s->ool_mr);
-    g_assert(
+    g_assert_nonnull(s->ool_mr);
+    g_assert_nonnull(
         object_property_add_const_link(OBJECT(s), "ool-mr", OBJECT(s->ool_mr)));
     s->ool_as = g_new0(AddressSpace, 1);
-    g_assert(s->ool_as);
+    g_assert_nonnull(s->ool_as);
     address_space_init(s->ool_as, s->ool_mr, "sep.ool");
 
     // SEPFW needs to be loaded by restore, supposedly

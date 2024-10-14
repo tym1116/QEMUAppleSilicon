@@ -64,7 +64,7 @@ static inline void apple_rtbuddy_register_ep(AppleRTBuddy *s, uint32_t ep,
 {
     AppleRTBuddyEPData *data;
 
-    g_assert(opaque);
+    g_assert_nonnull(opaque);
     data = g_new0(AppleRTBuddyEPData, 1);
     data->opaque = opaque;
     data->handler = handler;
