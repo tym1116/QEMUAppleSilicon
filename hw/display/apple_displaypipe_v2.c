@@ -156,6 +156,7 @@ static void apple_disp_gp_reg_write(GenPipeState *s, hwaddr addr, uint64_t data)
         DISP_DBGLOG("[GP%zu] Frame size <- 0x" HWADDR_FMT_plx, s->index, data);
         s->height = data & 0xFFFF;
         s->width = (data >> 16) & 0xFFFF;
+        break;
     }
     default: {
         DISP_DBGLOG("[GP%zu] Unknown write @ 0x" HWADDR_FMT_plx
